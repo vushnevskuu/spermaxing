@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       body: text,
       recipient_profile_id: recipient,
     })
-    .select("id, created_at, recipient_profile_id")
+    .select("id, body, created_at, recipient_profile_id")
     .single();
 
   if (error) {

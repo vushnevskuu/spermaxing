@@ -14,8 +14,12 @@
    - `supabase/migrations/20250404100000_chat_whisper.sql`
    - `supabase/migrations/20250405120000_avatar_cosmetics.sql`
 3. **Authentication** → Providers → **Anonymous** — включить.
-4. **Database** → **Publication** (или Replication) → для `supabase_realtime` добавь таблицы **`chat_messages`** и **`presence_rooms`** (иначе чат/лобби не обновятся у других).
+4. **Обязательно — Realtime (без этого «друзья не двигаются» и чужие сообщения не видны):**
+   - **Database** → **Publications** → выбери публикацию **`supabase_realtime`** → **включи таблицы** **`chat_messages`** и **`presence_rooms`** → **Save**.
+   - В старом UI это могло называться **Database → Replication**; суть одна: обе таблицы должны участвовать в Realtime.
 5. **Project Settings → API** — скопируй **Project URL** и **anon public** key (понадобятся в Vercel).
+
+После деплоя в коде есть **запасной опрос позиций раз в ~1.5 с** и **своё сообщение в чате сразу после ответа API** — но чтобы **второй игрок** видел чат и движение **без задержки**, пункт 4 всё равно нужен.
 
 ### Редиректы Auth (удобный порядок)
 

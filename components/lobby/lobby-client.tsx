@@ -376,29 +376,40 @@ export function LobbyClient() {
     [mock]
   );
 
+  const syncPresenceFromDb = useCallback(async () => {
+    if (!me || mock) return;
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("presence_rooms")
+      .select("*")
+      .eq("room_slug", LOBBY_ROOM_SLUG);
+    if (!data?.length) return;
+    const ids = [...new Set(data.map((r) => r.profile_id))];
+    const map = await hydrate(ids);
+    setSwimmers(
+      data.map((r) => ({
+        profileId: r.profile_id,
+        x: r.pos_x,
+        y: r.pos_y,
+        nickname: map.get(r.profile_id)?.nick ?? "?",
+        loadout: map.get(r.profile_id)?.loadout ?? fallbackLoadoutForProfile(r.profile_id),
+        inQueue: r.in_queue,
+      }))
+    );
+  }, [me, mock, hydrate]);
+
+  useEffect(() => {
+    void syncPresenceFromDb();
+  }, [syncPresenceFromDb]);
+
+  /** Fallback если Realtime по presence_rooms не настроен: периодически подтягиваем позиции из БД. */
   useEffect(() => {
     if (!me || mock) return;
-    (async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("presence_rooms")
-        .select("*")
-        .eq("room_slug", LOBBY_ROOM_SLUG);
-      if (!data?.length) return;
-      const ids = [...new Set(data.map((r) => r.profile_id))];
-      const map = await hydrate(ids);
-      setSwimmers(
-        data.map((r) => ({
-          profileId: r.profile_id,
-          x: r.pos_x,
-          y: r.pos_y,
-          nickname: map.get(r.profile_id)?.nick ?? "?",
-          loadout: map.get(r.profile_id)?.loadout ?? fallbackLoadoutForProfile(r.profile_id),
-          inQueue: r.in_queue,
-        }))
-      );
-    })();
-  }, [me, mock, hydrate]);
+    const id = window.setInterval(() => {
+      void syncPresenceFromDb();
+    }, 1500);
+    return () => clearInterval(id);
+  }, [me, mock, syncPresenceFromDb]);
 
   /* Mock bots + local (persistent bots + pairwise + egg repulsion) */
   useEffect(() => {
@@ -585,18 +596,21 @@ export function LobbyClient() {
           const recipientNick = m.recipient_profile_id
             ? map.get(m.recipient_profile_id)?.nick ?? "???"
             : null;
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: m.id,
-              profileId: m.profile_id,
-              nickname: nick,
-              body: m.body,
-              at: new Date(m.created_at).getTime(),
-              recipientProfileId: m.recipient_profile_id ?? null,
-              recipientNickname: recipientNick,
-            },
-          ]);
+          setMessages((prev) => {
+            if (prev.some((x) => x.id === m.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: m.id,
+                profileId: m.profile_id,
+                nickname: nick,
+                body: m.body,
+                at: new Date(m.created_at).getTime(),
+                recipientProfileId: m.recipient_profile_id ?? null,
+                recipientNickname: recipientNick,
+              },
+            ];
+          });
         }
       )
       .subscribe();
@@ -769,13 +783,44 @@ export function LobbyClient() {
       ]);
       return;
     }
-    await fetch("/api/chat", {
+    const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         body,
         recipientProfileId: recipientId,
       }),
+    });
+    const json = (await res.json().catch(() => null)) as
+      | {
+          ok?: boolean;
+          message?: {
+            id: string;
+            body: string;
+            created_at: string;
+            recipient_profile_id?: string | null;
+          };
+        }
+      | { error?: string }
+      | null;
+    if (!res.ok || !json || !("ok" in json) || !json.ok || !json.message) {
+      return;
+    }
+    const d = json.message;
+    setMessages((prev) => {
+      if (prev.some((x) => x.id === d.id)) return prev;
+      return [
+        ...prev,
+        {
+          id: d.id,
+          profileId: me.id,
+          nickname: me.nickname,
+          body: d.body,
+          at: new Date(d.created_at).getTime(),
+          recipientProfileId: d.recipient_profile_id ?? null,
+          recipientNickname: recipientNick,
+        },
+      ];
     });
   }
 
