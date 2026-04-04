@@ -31,8 +31,11 @@ export default function EnterPage() {
     try {
       if (cloud) {
         const supabase = createClient();
-        const { error: signErr } = await supabase.auth.signInAnonymously();
-        if (signErr) throw signErr;
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess.session) {
+          const { error: signErr } = await supabase.auth.signInAnonymously();
+          if (signErr) throw signErr;
+        }
         const res = await fetch("/api/register-nick", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

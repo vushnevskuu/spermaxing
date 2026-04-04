@@ -114,6 +114,15 @@ function lobbySwimmerMotion(
   return { facingDeg, moving };
 }
 
+/** Один плавунец на profile_id (страховка от гонок realtime + poll). */
+function dedupeSwimmersByProfileId(list: Swimmer[]): Swimmer[] {
+  const m = new Map<string, Swimmer>();
+  for (const sw of list) {
+    m.set(sw.profileId, sw);
+  }
+  return [...m.values()];
+}
+
 /** Слияние списка из БД/realtime с текущей позицией локального игрока из posRef (без лишних setState на весь лобби). */
 function buildDisplaySwimmers(
   swimmers: Swimmer[],
@@ -121,7 +130,7 @@ function buildDisplaySwimmers(
   mock: boolean,
   posRef: MutableRefObject<{ x: number; y: number }>
 ): Swimmer[] {
-  if (!me) return swimmers;
+  if (!me) return dedupeSwimmersByProfileId(swimmers);
   const loadout: AvatarLoadout = {
     avatarName: me.avatarName,
     colorTheme: me.colorTheme,
@@ -147,9 +156,9 @@ function buildDisplaySwimmers(
     s.profileId === me.id ? { ...s, x: lx, y: ly, inQueue: localInQ } : s
   );
   if (!mock && !merged.some((s) => s.profileId === me.id)) {
-    return [...merged, local];
+    return dedupeSwimmersByProfileId([...merged, local]);
   }
-  return merged;
+  return dedupeSwimmersByProfileId(merged);
 }
 
 type LobbyPlayfieldAvatarsProps = {
@@ -318,6 +327,7 @@ export function LobbyClient() {
   swimmersRef.current = swimmers;
   const playfieldRafFlushRef = useRef<(() => void) | null>(null);
   const prevEggZoneRef = useRef<boolean | null>(null);
+  const presenceUserIdRef = useRef<string | null>(null);
 
   const accentGeneration = useLobbyRhythmStore((s) => s.accentGeneration);
   const lobbyMusicOn = useLobbyRhythmStore((s) => s.lobbyMusicOn);
@@ -383,11 +393,19 @@ export function LobbyClient() {
       .from("presence_rooms")
       .select("*")
       .eq("room_slug", LOBBY_ROOM_SLUG);
-    if (!data?.length) return;
-    const ids = [...new Set(data.map((r) => r.profile_id))];
+    if (!data?.length) {
+      setSwimmers([]);
+      return;
+    }
+    const byId = new Map<string, (typeof data)[0]>();
+    for (const r of data) {
+      byId.set(r.profile_id, r);
+    }
+    const uniqueRows = [...byId.values()];
+    const ids = uniqueRows.map((r) => r.profile_id);
     const map = await hydrate(ids);
     setSwimmers(
-      data.map((r) => ({
+      uniqueRows.map((r) => ({
         profileId: r.profile_id,
         x: r.pos_x,
         y: r.pos_y,
@@ -402,12 +420,12 @@ export function LobbyClient() {
     void syncPresenceFromDb();
   }, [syncPresenceFromDb]);
 
-  /** Fallback если Realtime по presence_rooms не настроен: периодически подтягиваем позиции из БД. */
+  /** Редкий опрос БД (основной канал — Realtime; частый poll усиливает лаги). */
   useEffect(() => {
     if (!me || mock) return;
     const id = window.setInterval(() => {
       void syncPresenceFromDb();
-    }, 1500);
+    }, 5000);
     return () => clearInterval(id);
   }, [me, mock, syncPresenceFromDb]);
 
@@ -509,18 +527,26 @@ export function LobbyClient() {
           filter: `room_slug=eq.${LOBBY_ROOM_SLUG}`,
         },
         async (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldRow = payload.old as { profile_id?: string } | null;
+            const pid = oldRow?.profile_id;
+            if (pid) {
+              setSwimmers((prev) => prev.filter((sw) => sw.profileId !== pid));
+            }
+            return;
+          }
           const row = payload.new as {
             profile_id: string;
             pos_x: number;
             pos_y: number;
             in_queue: boolean;
           } | null;
-          if (!row) return;
+          if (!row?.profile_id) return;
           const map = await hydrate([row.profile_id]);
           const meta = map.get(row.profile_id);
           if (!meta) return;
           setSwimmers((prev) => {
-            const others = prev.filter((s) => s.profileId !== row.profile_id);
+            const others = prev.filter((sw) => sw.profileId !== row.profile_id);
             return [
               ...others,
               {
@@ -537,12 +563,16 @@ export function LobbyClient() {
       )
       .subscribe();
 
+    void supabase.auth.getUser().then(({ data: u }) => {
+      if (u.user) presenceUserIdRef.current = u.user.id;
+    });
+
     const iv = window.setInterval(async () => {
       if (!alive) return;
       const z = isInEggZone(posRef.current.x, posRef.current.y);
-      setInEggZone(z);
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
+      presenceUserIdRef.current = u.user.id;
       await supabase.from("presence_rooms").upsert(
         {
           room_slug: LOBBY_ROOM_SLUG,
@@ -560,8 +590,16 @@ export function LobbyClient() {
       alive = false;
       clearInterval(iv);
       supabase.removeChannel(channel);
+      const uid = presenceUserIdRef.current;
+      if (uid) {
+        void supabase
+          .from("presence_rooms")
+          .delete()
+          .eq("room_slug", LOBBY_ROOM_SLUG)
+          .eq("profile_id", uid);
+      }
     };
-  }, [me, mock, hydrate, setInEggZone]);
+  }, [me, mock, hydrate]);
 
   useEffect(() => {
     setOnline(Math.max(1, swimmers.length));
