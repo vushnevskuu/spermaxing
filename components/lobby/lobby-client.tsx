@@ -14,8 +14,14 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronUp, MessageSquare, Minus, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { isSupabaseConfigured } from "@/lib/mock-mode";
-import { LOBBY_ROOM_SLUG } from "@/lib/constants";
+import {
+  LOBBY_CHAT_HISTORY_LIMIT,
+  LOBBY_ROOM_SLUG,
+  PRESENCE_STALE_MS,
+  PRESENCE_UPSERT_INTERVAL_MS,
+} from "@/lib/constants";
 import { isInEggZone } from "@/lib/egg-zone";
 import { loadLocalProfile, type StoredProfile } from "@/lib/local-profile";
 import { useLobbyStore } from "@/store/lobby-store";
@@ -298,6 +304,9 @@ export function LobbyClient() {
   const mock = useMockLobby();
   const [swimmers, setSwimmers] = useState<Swimmer[]>([]);
   const [messages, setMessages] = useState<ChatRow[]>([]);
+  const [chatHistoryStatus, setChatHistoryStatus] = useState<"idle" | "loading" | "error" | "ready">("idle");
+  const [chatHistoryError, setChatHistoryError] = useState<string | null>(null);
+  const [chatBootToken, setChatBootToken] = useState(0);
   const [chatInput, setChatInput] = useState("");
   const [whisperTo, setWhisperTo] = useState<{ id: string; nick: string } | null>(null);
   const chatFocusedRef = useRef(false);
@@ -402,10 +411,12 @@ export function LobbyClient() {
       byId.set(r.profile_id, r);
     }
     const uniqueRows = [...byId.values()];
-    const ids = uniqueRows.map((r) => r.profile_id);
+    const staleBefore = new Date(Date.now() - PRESENCE_STALE_MS).toISOString();
+    const freshRows = uniqueRows.filter((r) => r.updated_at >= staleBefore);
+    const ids = freshRows.map((r) => r.profile_id);
     const map = await hydrate(ids);
     setSwimmers(
-      uniqueRows.map((r) => ({
+      freshRows.map((r) => ({
         profileId: r.profile_id,
         x: r.pos_x,
         y: r.pos_y,
@@ -542,13 +553,47 @@ export function LobbyClient() {
             in_queue: boolean;
           } | null;
           if (!row?.profile_id) return;
+
+          let hadExisting = false;
+          setSwimmers((prev) => {
+            const existing = prev.find((sw) => sw.profileId === row.profile_id);
+            if (existing) {
+              hadExisting = true;
+              return prev.map((sw) =>
+                sw.profileId === row.profile_id
+                  ? {
+                      ...sw,
+                      x: row.pos_x,
+                      y: row.pos_y,
+                      inQueue: row.in_queue,
+                    }
+                  : sw
+              );
+            }
+            return prev;
+          });
+
+          if (hadExisting) return;
+          if (!alive) return;
+
           const map = await hydrate([row.profile_id]);
           const meta = map.get(row.profile_id);
-          if (!meta) return;
+          if (!meta || !alive) return;
           setSwimmers((prev) => {
-            const others = prev.filter((sw) => sw.profileId !== row.profile_id);
+            if (prev.some((sw) => sw.profileId === row.profile_id)) {
+              return prev.map((sw) =>
+                sw.profileId === row.profile_id
+                  ? {
+                      ...sw,
+                      x: row.pos_x,
+                      y: row.pos_y,
+                      inQueue: row.in_queue,
+                    }
+                  : sw
+              );
+            }
             return [
-              ...others,
+              ...prev.filter((sw) => sw.profileId !== row.profile_id),
               {
                 profileId: row.profile_id,
                 x: row.pos_x,
@@ -569,14 +614,13 @@ export function LobbyClient() {
 
     const iv = window.setInterval(async () => {
       if (!alive) return;
+      const uid = presenceUserIdRef.current;
+      if (!uid) return;
       const z = isInEggZone(posRef.current.x, posRef.current.y);
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return;
-      presenceUserIdRef.current = u.user.id;
       await supabase.from("presence_rooms").upsert(
         {
           room_slug: LOBBY_ROOM_SLUG,
-          profile_id: u.user.id,
+          profile_id: uid,
           pos_x: posRef.current.x,
           pos_y: posRef.current.y,
           in_queue: z,
@@ -584,7 +628,7 @@ export function LobbyClient() {
         },
         { onConflict: "room_slug,profile_id" }
       );
-    }, 220);
+    }, PRESENCE_UPSERT_INTERVAL_MS);
 
     return () => {
       alive = false;
@@ -605,57 +649,115 @@ export function LobbyClient() {
     setOnline(Math.max(1, swimmers.length));
   }, [swimmers]);
 
-  /* Chat realtime */
+  /* Чат: история из БД, затем Realtime */
   useEffect(() => {
     if (!me || mock) return;
     const supabase = createClient();
-    const ch = supabase
-      .channel("chat-main")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_messages",
-          filter: `room_slug=eq.${LOBBY_ROOM_SLUG}`,
-        },
-        async (payload) => {
-          const m = payload.new as {
-            id: string;
-            profile_id: string;
-            body: string;
-            created_at: string;
-            recipient_profile_id?: string | null;
-          };
-          const ids = [m.profile_id];
-          if (m.recipient_profile_id) ids.push(m.recipient_profile_id);
-          const map = await hydrate(ids);
-          const nick = map.get(m.profile_id)?.nick ?? "???";
-          const recipientNick = m.recipient_profile_id
-            ? map.get(m.recipient_profile_id)?.nick ?? "???"
-            : null;
-          setMessages((prev) => {
-            if (prev.some((x) => x.id === m.id)) return prev;
-            return [
-              ...prev,
-              {
-                id: m.id,
-                profileId: m.profile_id,
-                nickname: nick,
-                body: m.body,
-                at: new Date(m.created_at).getTime(),
-                recipientProfileId: m.recipient_profile_id ?? null,
-                recipientNickname: recipientNick,
-              },
-            ];
-          });
-        }
-      )
-      .subscribe();
+    let cancelled = false;
+    let chatChannel: RealtimeChannel | null = null;
+
+    async function bootChat() {
+      setChatHistoryStatus("loading");
+      setChatHistoryError(null);
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("id, profile_id, body, created_at, recipient_profile_id")
+        .eq("room_slug", LOBBY_ROOM_SLUG)
+        .order("created_at", { ascending: false })
+        .limit(LOBBY_CHAT_HISTORY_LIMIT);
+      if (cancelled) return;
+      if (error) {
+        setChatHistoryStatus("error");
+        setChatHistoryError(error.message);
+        return;
+      }
+      const rowsRaw = data ?? [];
+      const rows = [...rowsRaw].reverse();
+      const idSet = new Set<string>();
+      for (const r of rows) {
+        idSet.add(r.profile_id);
+        if (r.recipient_profile_id) idSet.add(r.recipient_profile_id);
+      }
+      const map = await hydrate([...idSet]);
+      if (cancelled) return;
+      const chatRows: ChatRow[] = rows.map((r) => ({
+        id: r.id,
+        profileId: r.profile_id,
+        nickname: map.get(r.profile_id)?.nick ?? "???",
+        body: r.body,
+        at: new Date(r.created_at).getTime(),
+        recipientProfileId: r.recipient_profile_id ?? null,
+        recipientNickname: r.recipient_profile_id
+          ? (map.get(r.recipient_profile_id)?.nick ?? "???")
+          : null,
+      }));
+      setMessages(chatRows);
+      setChatHistoryStatus("ready");
+
+      if (cancelled) return;
+      chatChannel = supabase
+        .channel("chat-main")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "chat_messages",
+            filter: `room_slug=eq.${LOBBY_ROOM_SLUG}`,
+          },
+          async (payload) => {
+            const m = payload.new as {
+              id: string;
+              profile_id: string;
+              body: string;
+              created_at: string;
+              recipient_profile_id?: string | null;
+            };
+            const nickFromLobby = (id: string) =>
+              swimmersRef.current.find((s) => s.profileId === id)?.nickname;
+            const need: string[] = [];
+            if (!nickFromLobby(m.profile_id)) need.push(m.profile_id);
+            if (m.recipient_profile_id && !nickFromLobby(m.recipient_profile_id)) {
+              need.push(m.recipient_profile_id);
+            }
+            const hmap =
+              need.length > 0
+                ? await hydrate(need)
+                : new Map<string, { nick: string; loadout: AvatarLoadout }>();
+            const nick =
+              nickFromLobby(m.profile_id) ?? hmap.get(m.profile_id)?.nick ?? "???";
+            const recipientNick = m.recipient_profile_id
+              ? nickFromLobby(m.recipient_profile_id) ??
+                hmap.get(m.recipient_profile_id)?.nick ??
+                "???"
+              : null;
+            setMessages((prev) => {
+              if (prev.some((x) => x.id === m.id)) return prev;
+              return [
+                ...prev,
+                {
+                  id: m.id,
+                  profileId: m.profile_id,
+                  nickname: nick,
+                  body: m.body,
+                  at: new Date(m.created_at).getTime(),
+                  recipientProfileId: m.recipient_profile_id ?? null,
+                  recipientNickname: recipientNick,
+                },
+              ];
+            });
+          }
+        )
+        .subscribe();
+    }
+
+    void bootChat();
+
     return () => {
-      supabase.removeChannel(ch);
+      cancelled = true;
+      if (chatChannel) supabase.removeChannel(chatChannel);
     };
-  }, [me, mock, hydrate]);
+  }, [me, mock, hydrate, chatBootToken]);
 
   /* Matchmaking RPC */
   useEffect(() => {
@@ -1038,7 +1140,25 @@ export function LobbyClient() {
                     scrollbarClassName="w-1 border-l-0 p-px"
                   >
                     <div className="flex flex-col gap-2 pr-1 font-sans text-[11px] leading-snug">
-                      {visibleMessages.map((m) => {
+                      {!mock &&
+                      (chatHistoryStatus === "idle" || chatHistoryStatus === "loading") ? (
+                        <p className="py-2 text-center text-[10px] text-zinc-500">Загрузка чата…</p>
+                      ) : chatHistoryStatus === "error" ? (
+                        <div className="flex flex-col items-center gap-2 py-2 text-center text-[10px] text-red-300">
+                          <p>{chatHistoryError ?? "Не удалось загрузить историю"}</p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setChatBootToken((t) => t + 1)}
+                          >
+                            Повторить
+                          </Button>
+                        </div>
+                      ) : null}
+                      {chatHistoryStatus === "ready" || mock
+                        ? visibleMessages.map((m) => {
                         const isMine = m.profileId === me.id && m.profileId !== "system";
                         const incoming =
                           m.recipientProfileId === me.id &&
@@ -1081,9 +1201,10 @@ export function LobbyClient() {
                             <div className={incoming ? "text-foreground/90" : ""}>{m.body}</div>
                           </div>
                         );
-                      })}
-                      {visibleMessages.length === 0 ? (
-                        <p className="py-2 text-center text-[10px] text-zinc-500">No messages yet.</p>
+                      })
+                        : null}
+                      {(chatHistoryStatus === "ready" || mock) && visibleMessages.length === 0 ? (
+                        <p className="py-2 text-center text-[10px] text-zinc-500">Пока нет сообщений.</p>
                       ) : null}
                     </div>
                   </ScrollArea>

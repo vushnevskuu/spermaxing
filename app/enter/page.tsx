@@ -43,12 +43,20 @@ export default function EnterPage() {
         });
         if (!res.ok) {
           const j = (await res.json()) as { error?: unknown };
-          const msg =
-            typeof j.error === "string"
-              ? j.error
-              : j.error && typeof j.error === "object" && "formErrors" in j.error
-                ? "Invalid nickname format"
-                : "Server rejected nickname";
+          let msg: string;
+          if (res.status === 401) {
+            msg =
+              "Сессия не найдена. Обнови страницу и попробуй снова (или отключи блокировку куков для сайта).";
+          } else if (res.status === 409) {
+            msg =
+              "Этот ник уже занят другим входом (другой браузер, инкогнито или после очистки данных сайта). Зайди с того же браузера, где уже регистрировался, или выбери другой ник.";
+          } else if (typeof j.error === "string") {
+            msg = j.error;
+          } else if (j.error && typeof j.error === "object" && "formErrors" in j.error) {
+            msg = "Проверь формат ника.";
+          } else {
+            msg = "Сервер отклонил ник. Попробуй ещё раз.";
+          }
           throw new Error(msg);
         }
         const { data: u } = await supabase.auth.getUser();

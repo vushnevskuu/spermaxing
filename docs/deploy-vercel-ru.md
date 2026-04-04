@@ -13,13 +13,14 @@
    - `supabase/migrations/20250403120000_init.sql`
    - `supabase/migrations/20250404100000_chat_whisper.sql`
    - `supabase/migrations/20250405120000_avatar_cosmetics.sql`
+   - `supabase/migrations/20250406120000_prune_stale_presence.sql`
 3. **Authentication** → Providers → **Anonymous** — включить.
 4. **Обязательно — Realtime (без этого «друзья не двигаются» и чужие сообщения не видны):**
    - **Database** → **Publications** → выбери публикацию **`supabase_realtime`** → **включи таблицы** **`chat_messages`** и **`presence_rooms`** → **Save**.
    - В старом UI это могло называться **Database → Replication**; суть одна: обе таблицы должны участвовать в Realtime.
 5. **Project Settings → API** — скопируй **Project URL** и **anon public** key (понадобятся в Vercel).
 
-После деплоя в коде есть **запасной опрос позиций раз в ~1.5 с** и **своё сообщение в чате сразу после ответа API** — но чтобы **второй игрок** видел чат и движение **без задержки**, пункт 4 всё равно нужен.
+После деплоя в коде есть **редкий запасной опрос позиций из БД** и **подгрузка истории чата при входе** — но чтобы **второй игрок** видел чат и движение **вживую**, пункт 4 (Realtime) всё равно обязателен.
 
 ### Редиректы Auth (удобный порядок)
 
@@ -29,6 +30,20 @@
   - **Redirect URLs**: добавь ровно  
     `https://xxxx.vercel.app/auth/callback`  
   - Для локалки можно оставить также `http://localhost:3000/auth/callback`.
+
+
+
+### Разовая очистка лобби (после тестов с «призраками»)
+
+В **SQL Editor** можно выполнить (slug лобби в коде сейчас `main`):
+
+```sql
+delete from public.presence_rooms where room_slug = 'main';
+```
+
+### Периодическое удаление старых presence (рекомендуется)
+
+Миграция `20250406120000_prune_stale_presence.sql` создаёт функцию `public.ovum_prune_stale_presence('main')`, которая удаляет строки старше **15 минут**. Подключи **pg_cron** (или Scheduled Triggers в Supabase) и вызывай её каждые **5–10 минут**, иначе после обрыва сессий аватары могут долго висеть в БД.
 
 ## 3. Vercel
 
