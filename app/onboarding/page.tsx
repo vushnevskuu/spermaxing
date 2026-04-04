@@ -1,0 +1,345 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { isSupabaseConfigured } from "@/lib/mock-mode";
+import { createClient } from "@/lib/supabase/client";
+import { onboardingSchema, type OnboardingInput } from "@/lib/validation";
+import { ALL_TAIL_TYPES, TAIL_LABELS } from "@/types";
+import {
+  FACE_EXTRA_IDS,
+  FACE_EXTRA_LABELS,
+  HEADGEAR_IDS,
+  HEADGEAR_LABELS,
+  NECK_WEAR_IDS,
+  NECK_WEAR_LABELS,
+} from "@/lib/loadout-cosmetics";
+import {
+  createGuestProfileId,
+  loadLocalProfile,
+  saveLocalProfile,
+  type StoredProfile,
+} from "@/lib/local-profile";
+import { computeLoadoutStats } from "@/lib/avatar-stats";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { PlayerCard } from "@/components/profile/player-card";
+import { storedToCard } from "@/lib/local-profile";
+
+const THEME_LABELS: Record<string, string> = {
+  electric: "Surge",
+  magenta: "Ember",
+  cyan: "Voltage",
+  gold: "Gold",
+  slime: "Slime",
+  void: "Shadow",
+};
+
+const defaults: OnboardingInput = {
+  nickname: "NeonSprinter",
+  avatarName: "Turbo Tadpole",
+  colorTheme: "electric",
+  tailType: "comet",
+  auraEffect: "pulse",
+  headgear: "striped_headband",
+  faceExtra: "cool_specs",
+  neckWear: "medal_pin",
+  title: "Chief Momentum Officer",
+  tagline: "I'm not late — I'm optimizing the racing line.",
+};
+
+export default function OnboardingPage() {
+  const router = useRouter();
+  const [form, setForm] = useState<OnboardingInput>(loadLocalProfile() ?? defaults);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [serverErr, setServerErr] = useState<string | null>(null);
+  const configured = isSupabaseConfigured();
+
+  useEffect(() => {
+    if (!configured) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (typeof window !== "undefined" && sessionStorage.getItem("ovum_rush_guest")) return;
+        const supabase = createClient();
+        const { data } = await supabase.auth.getSession();
+        if (!cancelled && !data.session) {
+          router.replace("/login");
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, router]);
+
+  const preview: StoredProfile = {
+    ...form,
+    id: loadLocalProfile()?.id ?? createGuestProfileId(),
+    wins: loadLocalProfile()?.wins ?? 0,
+    streak: loadLocalProfile()?.streak ?? 0,
+    podiums: loadLocalProfile()?.podiums ?? 0,
+    division: loadLocalProfile()?.division ?? "Rookie Neon",
+    badges: loadLocalProfile()?.badges ?? ["Early Access", "Lobby Legend"],
+  };
+  const stats = computeLoadoutStats({
+    avatarName: form.avatarName,
+    colorTheme: form.colorTheme,
+    tailType: form.tailType,
+    auraEffect: form.auraEffect,
+    headgear: form.headgear,
+    faceExtra: form.faceExtra,
+    neckWear: form.neckWear,
+  });
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setServerErr(null);
+    const parsed = onboardingSchema.safeParse(form);
+    if (!parsed.success) {
+      const flat = parsed.error.flatten().fieldErrors;
+      setErrors(
+        Object.fromEntries(Object.entries(flat).map(([k, v]) => [k, (v ?? []).join(", ")]))
+      );
+      return;
+    }
+    setErrors({});
+    setSaving(true);
+    try {
+      const guest =
+        typeof window !== "undefined" && sessionStorage.getItem("ovum_rush_guest");
+      let userId = preview.id;
+      if (configured && !guest) {
+        const res = await fetch("/api/onboarding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parsed.data),
+        });
+        if (!res.ok) {
+          const j = (await res.json()) as { error?: string };
+          throw new Error(typeof j.error === "string" ? j.error : "Server rejected data");
+        }
+        const supabase = createClient();
+        const { data: u } = await supabase.auth.getUser();
+        if (u.user) userId = u.user.id;
+      }
+      const stored: StoredProfile = {
+        ...parsed.data,
+        id: userId,
+        wins: preview.wins,
+        streak: preview.streak,
+        podiums: preview.podiums,
+        division: preview.division,
+        badges: preview.badges,
+      };
+      saveLocalProfile(stored);
+      router.push("/lobby");
+    } catch (er: unknown) {
+      setServerErr(er instanceof Error ? er.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 md:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Build your swimmer</CardTitle>
+          <CardDescription>
+            Public nickname and cartoon style — no photo uploads. Whispers stay in the lobby chat.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={submit}>
+            {serverErr ? (
+              <p className="text-sm text-red-300">{serverErr}</p>
+            ) : null}
+            <div>
+              <Label htmlFor="nickname">Nickname</Label>
+              <Input
+                id="nickname"
+                value={form.nickname}
+                onChange={(e) => setForm((f) => ({ ...f, nickname: e.target.value }))}
+              />
+              {errors.nickname ? <p className="text-xs text-red-400">{errors.nickname}</p> : null}
+            </div>
+            <div>
+              <Label htmlFor="avatarName">Avatar name</Label>
+              <Input
+                id="avatarName"
+                value={form.avatarName}
+                onChange={(e) => setForm((f) => ({ ...f, avatarName: e.target.value }))}
+              />
+            </div>
+            <div className="rounded-md border border-border bg-muted/20 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Wardrobe flair
+              </p>
+              <p className="mb-3 text-[11px] leading-snug text-muted-foreground">
+                Cartoon props only — so everyone reads you in chat at a glance. No stat change.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <Label>Head</Label>
+                  <select
+                    className="mt-1 flex h-10 w-full rounded-sm border-2 border-border bg-background px-2 text-xs"
+                    value={form.headgear}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        headgear: e.target.value as OnboardingInput["headgear"],
+                      }))
+                    }
+                  >
+                    {HEADGEAR_IDS.map((id) => (
+                      <option key={id} value={id}>
+                        {HEADGEAR_LABELS[id]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label>Face</Label>
+                  <select
+                    className="mt-1 flex h-10 w-full rounded-sm border-2 border-border bg-background px-2 text-xs"
+                    value={form.faceExtra}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        faceExtra: e.target.value as OnboardingInput["faceExtra"],
+                      }))
+                    }
+                  >
+                    {FACE_EXTRA_IDS.map((id) => (
+                      <option key={id} value={id}>
+                        {FACE_EXTRA_LABELS[id]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label>Neck</Label>
+                  <select
+                    className="mt-1 flex h-10 w-full rounded-sm border-2 border-border bg-background px-2 text-xs"
+                    value={form.neckWear}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        neckWear: e.target.value as OnboardingInput["neckWear"],
+                      }))
+                    }
+                  >
+                    {NECK_WEAR_IDS.map((id) => (
+                      <option key={id} value={id}>
+                        {NECK_WEAR_LABELS[id]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Theme</Label>
+                <select
+                  className="mt-1 flex h-10 w-full rounded-sm border-2 border-border bg-muted/40 px-3 text-sm"
+                  value={form.colorTheme}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      colorTheme: e.target.value as OnboardingInput["colorTheme"],
+                    }))
+                  }
+                >
+                  {["electric", "magenta", "cyan", "gold", "slime", "void"].map((x) => (
+                    <option key={x} value={x}>
+                      {THEME_LABELS[x] ?? x}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Tail</Label>
+                <select
+                  className="mt-1 flex h-10 w-full rounded-sm border-2 border-border bg-muted/40 px-3 text-sm"
+                  value={form.tailType}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      tailType: e.target.value as OnboardingInput["tailType"],
+                    }))
+                  }
+                >
+                  {ALL_TAIL_TYPES.map((x) => (
+                    <option key={x} value={x}>
+                      {TAIL_LABELS[x]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Aura</Label>
+                <select
+                  className="mt-1 flex h-10 w-full rounded-sm border-2 border-border bg-muted/40 px-3 text-sm"
+                  value={form.auraEffect}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      auraEffect: e.target.value as OnboardingInput["auraEffect"],
+                    }))
+                  }
+                >
+                  {["none", "pulse", "rings", "spark"].map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="tagline">Tagline</Label>
+              <Input
+                id="tagline"
+                value={form.tagline}
+                onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={saving} className="neon">
+                {saving ? "Saving…" : "To lobby"}
+              </Button>
+              <Button type="button" variant="ghost" asChild>
+                <Link href="/">Cancel</Link>
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+      <div>
+        <p className="mb-3 text-sm text-muted-foreground">Card preview</p>
+        <PlayerCard data={storedToCard(preview)} />
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          OVR (derived): {stats.ovr} · SPD {stats.speed} · HND {stats.handling} · BST {stats.boost} ·
+          STM {stats.stamina}
+        </p>
+      </div>
+    </div>
+  );
+}

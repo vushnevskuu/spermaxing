@@ -1,0 +1,29 @@
+---
+description: 
+alwaysApply: true
+---
+
+---
+description: Product rules for OVUM RUSH
+alwaysApply: true
+---
+
+Build only for MVP speed and clarity.
+
+Product rules:
+- This app is a humorous realtime arcade-social web app.
+- Keep visuals cartoonish, neon, non-graphic, non-explicit.
+- No pornographic language.
+- No medical advice or health claims.
+- 18+ warning in UI.
+- No private messaging in MVP.
+- No image uploads in MVP.
+- Prioritize realtime lobby, chat, race trigger, race results, profile card.
+- Use Supabase for auth, db, and realtime.
+- Prefer simple maintainable architecture over clever abstractions.
+- Every feature must have loading, empty, and error states.
+- All DB access should be typed and safe.
+- All forms should use validation.
+- All public content should be sanitized.
+- Keep components modular and readable.
+- Make the UI look polished and launchable.

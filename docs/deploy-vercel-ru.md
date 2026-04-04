@@ -1,0 +1,47 @@
+# Деплой на Vercel + Supabase — что сделать вручную
+
+Репозиторий уже готов к сборке (`npm run build`). Ниже — только шаги в облаках (нужны твой GitHub, аккаунты Vercel и Supabase).
+
+## 1. GitHub
+
+- Создай репозиторий и **запушь этот проект** (если ещё не в облаке).
+
+## 2. Supabase (сначала база)
+
+1. [supabase.com](https://supabase.com) → New project (Free).
+2. **SQL Editor** — выполни файлы **по порядку** (скопируй содержимое из репозитория):
+   - `supabase/migrations/20250403120000_init.sql`
+   - `supabase/migrations/20250404100000_chat_whisper.sql`
+   - `supabase/migrations/20250405120000_avatar_cosmetics.sql`
+3. **Authentication** → Providers → **Anonymous** — включить.
+4. **Database** → **Publication** (или Replication) → для `supabase_realtime` добавь таблицы **`chat_messages`** и **`presence_rooms`** (иначе чат/лобби не обновятся у других).
+5. **Project Settings → API** — скопируй **Project URL** и **anon public** key (понадобятся в Vercel).
+
+### Редиректы Auth (удобный порядок)
+
+- Сразу после **первого** деплоя на Vercel у тебя будет URL вида `https://xxxx.vercel.app`.
+- **Authentication → URL Configuration**:
+  - **Site URL**: `https://xxxx.vercel.app` (подставь свой).
+  - **Redirect URLs**: добавь ровно  
+    `https://xxxx.vercel.app/auth/callback`  
+  - Для локалки можно оставить также `http://localhost:3000/auth/callback`.
+
+## 3. Vercel
+
+1. [vercel.com](https://vercel.com) → **Add New… → Project** → Import репозитория с GitHub.
+2. Framework: **Next.js** (по умолчанию).
+3. **Environment Variables** (и для Production, и для Preview):
+   - `NEXT_PUBLIC_SUPABASE_URL` = URL проекта Supabase
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = anon key
+4. **Deploy**.
+5. Если редирект в Supabase ещё не совпадал с выданным доменом — обнови **Site URL** и **Redirect URLs** (шаг 2) и сохрани.
+
+## 4. Проверка
+
+- Открой прод-URL Vercel в двух браузерах (или инкогнито + обычный).
+- Не включай **guest/mock** для проверки сети (нужен live Supabase).
+- Напиши в лобби-чат — сообщение должно появиться у второго клиента.
+
+## Если сборка на Vercel упала
+
+- Открой вкладку **Deployments → Build Logs** и пришли текст ошибки.
