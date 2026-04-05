@@ -7,6 +7,13 @@ import { isSupabaseConfigured } from "@/lib/mock-mode";
 import { loadLocalProfile } from "@/lib/local-profile";
 import { Button } from "@/components/ui/button";
 import { BAD_ITEMS, GOOD_ITEMS, OBSTACLES, type BadId, type GoodId, type ObstacleId } from "@/lib/vertical-rush-catalog";
+import {
+  drawLaneDividers,
+  drawPickupOrObstacle,
+  drawPlayerSwimmer,
+  drawProjectile,
+  drawVerticalRushBackground,
+} from "@/lib/vertical-rush-render";
 
 const W = 360;
 const H = 640;
@@ -98,25 +105,25 @@ export function VerticalRushClient() {
     switch (id) {
       case "zinc":
         g.hp = Math.min(g.maxHp, g.hp + 18);
-        pushToast(g, "+HP (zinc)");
+        pushToast(g, "Zinc: +HP");
         break;
       case "omega":
         g.speedMult = Math.min(1.55, g.speedMult * 1.12);
-        pushToast(g, "+Speed (omega)");
+        pushToast(g, "Omega: +speed");
         break;
       case "garlic":
         g.armor = Math.min(0.45, g.armor + 0.12);
-        pushToast(g, "+Toughness (garlic)");
+        pushToast(g, "Garlic: +toughness");
         break;
       case "onion_ring":
         g.maxHp += 12;
         g.hp = Math.min(g.maxHp, g.hp + 8);
-        pushToast(g, "+Max HP (onion ring)");
+        pushToast(g, "Onion ring: +max HP");
         break;
       case "citrus":
         g.canShoot = true;
         g.ammo = Math.min(99, g.ammo + 6);
-        pushToast(g, "+Plasma shots!");
+        pushToast(g, "Citrus: shots unlocked!");
         break;
     }
   };
@@ -126,21 +133,21 @@ export function VerticalRushClient() {
       case "chips":
         g.speedMult = Math.max(0.55, g.speedMult * 0.88);
         g.slowUntil = performance.now() + 3800;
-        pushToast(g, "Slowed (chips)");
+        pushToast(g, "Chips: slowed");
         break;
       case "candy":
         g.speedMult = Math.max(0.62, g.speedMult * 0.9);
         g.hp -= 6;
-        pushToast(g, "Sticky (candy)");
+        pushToast(g, "Candy: sticky, −HP");
         break;
       case "soda":
         g.hp -= 10;
         g.slowUntil = performance.now() + 2800;
-        pushToast(g, "Bloated (soda)");
+        pushToast(g, "Soda: bloated");
         break;
       case "fried_ring":
         g.speedMult = Math.max(0.5, g.speedMult * 0.82);
-        pushToast(g, "Greased (fried ring)");
+        pushToast(g, "Fried ring: greased");
         break;
       case "sugar_cube":
         g.hp -= 14;
@@ -311,7 +318,11 @@ export function VerticalRushClient() {
             .then(async (r) => {
               const j = (await r.json().catch(() => null)) as { bestDistanceM?: number; isNewBest?: boolean } | null;
               if (j?.bestDistanceM != null) {
-                setSavedCloud(j.isNewBest ? `New best saved: ${j.bestDistanceM} m` : `Synced · best ${j.bestDistanceM} m`);
+                setSavedCloud(
+                  j.isNewBest
+                    ? `New cloud best: ${j.bestDistanceM} m`
+                    : `Synced · best ${j.bestDistanceM} m`
+                );
               }
             })
             .catch(() => setSavedCloud("Cloud sync failed (offline?)"));
@@ -333,84 +344,24 @@ export function VerticalRushClient() {
         });
       }
 
-      ctx.fillStyle = "#07070d";
-      ctx.fillRect(0, 0, W, H);
-      const grd = ctx.createLinearGradient(0, 0, 0, H);
-      grd.addColorStop(0, "#1a1025");
-      grd.addColorStop(1, "#0a0a12");
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, W, H);
-
-      for (let i = 0; i < 14; i++) {
-        const yy = ((now * 0.08 + i * 48) % 600) - 20;
-        ctx.strokeStyle = "rgba(168,85,247,0.08)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, yy);
-        ctx.lineTo(W, yy + 30);
-        ctx.stroke();
-      }
-
-      for (let L = 1; L < LANES; L++) {
-        const x = L * (W / LANES);
-        ctx.strokeStyle = "rgba(255,255,255,0.06)";
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, H);
-        ctx.stroke();
-      }
+      drawVerticalRushBackground(ctx, W, H, g.scroll, now);
+      drawLaneDividers(ctx, W, H, LANES, now);
 
       for (const e of g.entities) {
         if (e.consumed) continue;
         const screenY = PLAYER_Y - (e.at - g.scroll) * 0.92;
-        if (screenY < -40 || screenY > H + 40) continue;
+        if (screenY < -48 || screenY > H + 48) continue;
         const cx = laneCenterX(e.lane);
-        let def: { label: string; emoji: string; color: string };
-        if (e.kind === "good") def = GOOD_ITEMS.find((x) => x.id === e.id)!;
-        else if (e.kind === "bad") def = BAD_ITEMS.find((x) => x.id === e.id)!;
-        else {
-          const o = OBSTACLES.find((x) => x.id === e.id)!;
-          def = { label: o.label, emoji: o.emoji, color: o.color };
-        }
-        ctx.fillStyle = def.color + "55";
-        ctx.beginPath();
-        ctx.arc(cx, screenY, 22, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = def.color;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.font = "20px system-ui";
-        ctx.textAlign = "center";
-        ctx.fillText(def.emoji, cx, screenY + 7);
+        drawPickupOrObstacle(ctx, e.kind, e.id, cx, screenY, now);
       }
 
       for (const p of g.projectiles) {
         const screenY = PLAYER_Y - (p.pos - g.scroll) * 0.92;
         const cx = laneCenterX(p.lane);
-        ctx.fillStyle = "#fbbf24";
-        ctx.beginPath();
-        ctx.arc(cx, screenY, 6, 0, Math.PI * 2);
-        ctx.fill();
+        drawProjectile(ctx, cx, screenY, now);
       }
 
-      ctx.fillStyle = "#e9d5ff";
-      ctx.beginPath();
-      ctx.ellipse(px, py, 18, 22, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#a855f7";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = "#fef08a";
-      ctx.beginPath();
-      ctx.arc(px - 5, py - 4, 4, 0, Math.PI * 2);
-      ctx.arc(px + 6, py - 4, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#4ade80";
-      ctx.beginPath();
-      ctx.moveTo(px, py + 10);
-      ctx.quadraticCurveTo(px - 28, py + 32, px - 42, py + 8);
-      ctx.quadraticCurveTo(px - 18, py + 18, px, py + 10);
-      ctx.fill();
+      drawPlayerSwimmer(ctx, px, py, now);
 
       raf = requestAnimationFrame(loop);
     };
@@ -439,8 +390,8 @@ export function VerticalRushClient() {
       </div>
 
       <p className="text-center text-[11px] leading-snug text-muted-foreground">
-        Nokia-style climb: dodge gray blocks, grab cyan/green buffs, avoid brown/pink junk. Arrows move lanes · Space
-        shoots (after Citrus pickup). Parody wellness props only — not medical advice.
+        Nokia-style climb: you move up through lanes. Buffs (cyan ring), junk debuffs (pink dashed ring), and red-framed
+        walls hurt on contact. Arrows strafe · Space shoots after Citrus. Parody wellness props only — not medical advice.
       </p>
 
       {phase === "loading" ? (
@@ -448,8 +399,41 @@ export function VerticalRushClient() {
       ) : null}
 
       {phase === "ready" ? (
-        <div className="flex flex-col items-center gap-4 py-8">
+        <div className="flex flex-col items-center gap-4 py-4">
           <p className="text-sm text-muted-foreground">Best run (this device): {bestLocal} m</p>
+          <div className="w-full max-w-sm space-y-3 rounded-lg border border-purple-500/25 bg-card/40 px-3 py-3 text-left text-[10px] leading-relaxed text-muted-foreground">
+            <p className="font-semibold text-foreground/90">On the track</p>
+            <div>
+              <p className="mb-1 font-medium text-cyan-300/90">Buffs (cyan outline)</p>
+              <ul className="list-inside list-disc space-y-0.5">
+                {GOOD_ITEMS.map((it) => (
+                  <li key={it.id}>
+                    <span className="text-foreground/80">{it.label}</span> — {it.hint}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="mb-1 font-medium text-pink-300/90">Junk (pink dashed outline)</p>
+              <ul className="list-inside list-disc space-y-0.5">
+                {BAD_ITEMS.map((it) => (
+                  <li key={it.id}>
+                    <span className="text-foreground/80">{it.label}</span> — {it.hint}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="mb-1 font-medium text-red-300/90">Obstacles (red frame) — crash = −HP</p>
+              <ul className="list-inside list-disc space-y-0.5">
+                {OBSTACLES.map((it) => (
+                  <li key={it.id}>
+                    <span className="text-foreground/80">{it.label}</span> — {it.hint}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
           <Button className="neon w-full max-w-xs" size="lg" onClick={startRun}>
             Start run
           </Button>
@@ -474,11 +458,11 @@ export function VerticalRushClient() {
           />
           {phase === "play" ? (
             <div className="mt-2 grid grid-cols-3 gap-1 text-center font-mono text-[10px] text-muted-foreground">
-              <span>Dist {hud.m} m</span>
+              <span>{hud.m} m</span>
               <span>
                 HP {hud.hp}/{hud.maxHp}
               </span>
-              <span>{hud.canShoot ? `Shot ${hud.ammo}` : "No gun"}</span>
+              <span>{hud.canShoot ? `Shots ${hud.ammo}` : "No shots"}</span>
             </div>
           ) : null}
           {hud.toast ? (
@@ -506,7 +490,7 @@ export function VerticalRushClient() {
 
       {phase === "play" ? (
         <p className="text-center text-[10px] text-muted-foreground">
-          Tip: tap left/right side of game to strafe on mobile.
+          Mobile: tap the left or right half of the game to strafe lanes.
         </p>
       ) : null}
     </div>
