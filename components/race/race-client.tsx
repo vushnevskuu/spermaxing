@@ -80,7 +80,9 @@ export function RaceClient({ roomId }: { roomId: string }) {
   const savedResultRef = useRef(false);
   const boostMeterRef = useRef<HTMLDivElement | null>(null);
   const hitOverlayRef = useRef<HTMLDivElement | null>(null);
+  const trackShakeRef = useRef<HTMLDivElement | null>(null);
   const hitFlashRef = useRef(0);
+  const [boostFx, setBoostFx] = useState(0);
 
   const demo = roomId === "demo";
 
@@ -214,6 +216,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
       if (e.code === "Space") {
         e.preventDefault();
         boostRef.current = Math.min(0.12, boostRef.current + 0.035);
+        setBoostFx((n) => n + 1);
       }
     };
     const up = (e: KeyboardEvent) => {
@@ -225,7 +228,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, []);
+  }, [setBoostFx]);
 
   useEffect(() => {
     if (!me || racePhase !== "racing" || racers.length < 2) return;
@@ -313,6 +316,15 @@ export function RaceClient({ roomId }: { roomId: string }) {
         const a = Math.min(0.45, hitFlashRef.current * 0.35);
         el.style.backgroundColor = a > 0.02 ? `rgba(248,113,113,${a})` : "transparent";
       }
+      const tr = trackShakeRef.current;
+      if (tr) {
+        const sh = hitFlashRef.current;
+        if (sh > 0.035) {
+          tr.style.transform = `translate3d(${Math.sin(now * 0.12) * sh * 5}px,${Math.cos(now * 0.11) * sh * 3}px,0)`;
+        } else {
+          tr.style.transform = "";
+        }
+      }
       const bm = boostMeterRef.current;
       if (bm) {
         bm.style.width = `${Math.min(100, (boostRef.current / 0.12) * 100)}%`;
@@ -327,6 +339,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
 
   const onTapBoost = () => {
     boostRef.current = Math.min(0.12, boostRef.current + 0.035);
+    setBoostFx((n) => n + 1);
   };
 
   const podium = useMemo(() => [...racers].sort((a, b) => b.progress - a.progress), [racers]);
@@ -405,12 +418,12 @@ export function RaceClient({ roomId }: { roomId: string }) {
           </div>
         </div>
         <p className="text-center text-[10px] leading-snug text-muted-foreground">
-          This screen is the <span className="text-foreground/80">lobby sprint race</span> (horizontal track, rival %). The Nokia-style
-          climb with pickups &amp; junk food is{" "}
+          <span className="text-foreground/85">Sprint heat</span> — три полосы, уклоняйся от неоновых помех, гони прогресс быстрее
+          соперника. Отдельный режим:{" "}
           <Link href="/rush" className="text-cyan-300 underline underline-offset-2 hover:text-cyan-200">
-            Vertical rush (Arcade)
+            Vertical rush
           </Link>
-          .
+          . Развлечение, не совет.
         </p>
 
         <AnimatePresence mode="wait">
@@ -420,23 +433,31 @@ export function RaceClient({ roomId }: { roomId: string }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="arcade-panel relative mx-auto min-h-[min(72dvh,620px)] w-full max-w-[360px] overflow-hidden rounded-lg border border-border/60 shadow-[0_0_40px_rgba(0,0,0,0.35)]"
-              style={{ perspective: "640px" }}
+              className="arcade-panel relative mx-auto min-h-[min(72dvh,620px)] w-full max-w-[360px] overflow-hidden rounded-xl border border-purple-500/35 bg-[#06020f] shadow-[0_0_48px_rgba(168,85,247,0.22),0_0_80px_rgba(34,211,238,0.06)]"
+              style={{ perspective: "720px" }}
             >
-              <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/50 via-background to-black" />
               <div
-                className="pointer-events-none absolute inset-0 opacity-[0.35] animate-speed-lines"
+                className="pointer-events-none absolute inset-0"
                 style={{
-                  backgroundImage:
-                    "repeating-linear-gradient(180deg, transparent 0px, transparent 10px, rgba(255,255,255,0.06) 11px, transparent 12px)",
-                  backgroundSize: "100% 22px",
+                  background:
+                    "radial-gradient(ellipse 85% 55% at 50% 38%, rgba(109,40,217,0.32), transparent 62%), radial-gradient(ellipse 70% 45% at 50% 100%, rgba(34,211,238,0.08), transparent 55%), linear-gradient(180deg, #12051f 0%, #07030f 42%, #020105 100%)",
                 }}
               />
               <div
-                className="pointer-events-none absolute bottom-[-8%] left-1/2 z-0 h-[42%] w-[220%] -translate-x-1/2 grid-floor animate-grid-drift rounded-t-[45%] opacity-60"
+                className="pointer-events-none absolute inset-0 opacity-[0.45] animate-speed-lines"
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(180deg, transparent 0px, transparent 9px, rgba(34,211,238,0.07) 10px, transparent 11px)",
+                  backgroundSize: "100% 20px",
+                  transform: racePhase === "racing" ? `translateY(${(prog * 14) % 20}px)` : undefined,
+                }}
+              />
+              <div
+                className="pointer-events-none absolute bottom-[-8%] left-1/2 z-0 h-[42%] w-[220%] -translate-x-1/2 grid-floor animate-grid-drift rounded-t-[45%] opacity-[0.55]"
                 style={{
                   transform: "translateX(-50%) rotateX(56deg)",
                   transformOrigin: "50% 100%",
+                  filter: "hue-rotate(-8deg) saturate(1.15)",
                 }}
               />
 
@@ -446,110 +467,175 @@ export function RaceClient({ roomId }: { roomId: string }) {
                 style={{ backgroundColor: "transparent" }}
               />
 
-              <div className="absolute left-0 right-0 top-0 z-20 h-2 bg-black/60 px-1 pt-1">
-                <div className="flex h-1 gap-1 overflow-hidden rounded-full bg-white/10">
-                  <motion.div
-                    className="h-full rounded-full bg-neutral-300"
-                    animate={{ width: `${Math.round(prog * 100)}%` }}
-                    transition={{ type: "spring", stiffness: 120, damping: 22 }}
-                  />
-                </div>
-                <div className="mt-0.5 flex justify-between px-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <span>You</span>
-                  <span>{Math.round(prog * 100)}%</span>
-                  <span>Rival {Math.round(botProg * 100)}%</span>
+              <div className="absolute left-0 right-0 top-0 z-20 border-b border-white/5 bg-black/55 px-2 pb-1.5 pt-1 backdrop-blur-[2px]">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <div className="mb-0.5 flex justify-between px-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-cyan-200/90">
+                      <span>You</span>
+                      <span>{Math.round(prog * 100)}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10 shadow-inner">
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-cyan-300 to-teal-300 shadow-[0_0_14px_rgba(34,211,238,0.55)]"
+                        animate={{ width: `${Math.max(3, Math.round(prog * 100))}%` }}
+                        transition={{ type: "spring", stiffness: 200, damping: 24 }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 flex justify-between px-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-fuchsia-200/85">
+                      <span>Rival</span>
+                      <span>{Math.round(botProg * 100)}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10 shadow-inner">
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-fuchsia-500 via-pink-400 to-amber-300 shadow-[0_0_14px_rgba(232,121,249,0.45)]"
+                        animate={{ width: `${Math.max(3, Math.round(botProg * 100))}%` }}
+                        transition={{ type: "spring", stiffness: 200, damping: 24 }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="absolute left-3 right-3 top-11 z-10 flex flex-col gap-1.5 text-[10px] font-mono text-muted-foreground">
+              <div className="absolute left-3 right-3 top-[3.9rem] z-10 flex flex-col gap-1 text-[10px] font-mono text-muted-foreground">
                 <div className="flex justify-between gap-1">
-                  <span className="leading-tight">← → lanes · dodge red hazards</span>
-                  <span className="shrink-0 text-foreground/80">Space · BOOST</span>
+                  <span className="leading-tight text-cyan-100/75">← → полосы · обходи пурпурные сферы</span>
+                  <span className="shrink-0 text-amber-200/90">Space / GO — boost</span>
                 </div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+                <div className="h-1 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-cyan-500/15">
                   <div
                     ref={boostMeterRef}
-                    className="h-full w-0 rounded-full bg-cyan-400/90 shadow-[0_0_10px_rgba(34,211,238,0.35)] transition-[width] duration-75"
+                    className="h-full w-0 rounded-full bg-gradient-to-r from-amber-300 to-cyan-300 shadow-[0_0_12px_rgba(250,204,21,0.45)] transition-[width] duration-75"
                   />
                 </div>
               </div>
 
-              {[0, 1, 2].map((lane) => (
-                <div
-                  key={lane}
-                  className="absolute bottom-0 top-[4.75rem] z-[1] w-px bg-gradient-to-b from-white/15 via-white/8 to-transparent"
-                  style={{ left: `${20 + lane * 30}%` }}
-                />
-              ))}
+              <div ref={trackShakeRef} className="absolute inset-x-0 bottom-0 top-[5.35rem] z-[1] will-change-transform">
+                {[0, 1, 2].map((lane) => (
+                  <div
+                    key={lane}
+                    className="pointer-events-none absolute bottom-0 top-0 w-[30%] opacity-[0.14]"
+                    style={{
+                      left: `${5 + lane * 30}%`,
+                      background:
+                        "linear-gradient(90deg, transparent 0%, rgba(168,85,247,0.35) 45%, rgba(34,211,238,0.2) 50%, rgba(168,85,247,0.35) 55%, transparent 100%)",
+                    }}
+                  />
+                ))}
+                {[0, 1, 2].map((lane) => (
+                  <div
+                    key={`g-${lane}`}
+                    className="absolute bottom-0 top-0 w-px bg-gradient-to-b from-cyan-300/25 via-fuchsia-400/15 to-transparent shadow-[0_0_8px_rgba(34,211,238,0.25)]"
+                    style={{ left: `${20 + lane * 30}%` }}
+                  />
+                ))}
 
-              <div className="absolute inset-x-0 bottom-0 top-[4.75rem] z-[2]">
-                {Array.from({ length: 8 }).map((_, i) => {
-                  const o = obstacleAt(seedRef.current, i);
-                  return (
-                    <div
-                      key={i}
-                      className="absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-                      style={{
-                        left: `${20 + o.lane * 30}%`,
-                        top: `${12 + o.t * 76}%`,
-                      }}
+                <div className="absolute inset-0 z-[2]">
+                  {Array.from({ length: 8 }).map((_, i) => {
+                    const o = obstacleAt(seedRef.current, i);
+                    return (
+                      <div
+                        key={i}
+                        className="animate-race-hazard-pulse absolute flex h-[3.25rem] w-[3.25rem] items-center justify-center"
+                        style={{
+                          left: `${20 + o.lane * 30}%`,
+                          top: `${12 + o.t * 76}%`,
+                          animationDelay: `${(i * 0.31) % 2.2}s`,
+                        }}
+                        aria-hidden
+                      >
+                        <div className="relative h-[2.65rem] w-[2.65rem] rounded-full border-2 border-fuchsia-400/90 bg-gradient-to-br from-rose-600/75 via-purple-900/55 to-indigo-950/80 shadow-[0_0_22px_rgba(244,63,94,0.5),inset_0_0_12px_rgba(0,0,0,0.35)] ring-2 ring-rose-400/35">
+                          <div className="absolute inset-[5px] rounded-full border border-white/25 bg-white/5" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[11px] font-black tracking-tight text-amber-200/95 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]">
+                              ×
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {racePhase === "racing" && meR && botR ? (
+                    <svg
+                      className="pointer-events-none absolute inset-0 z-[3] overflow-visible"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
                       aria-hidden
                     >
-                      <div className="relative h-11 w-11 rotate-45 rounded-md border-2 border-rose-400 bg-rose-600/45 shadow-[0_0_24px_rgba(244,63,94,0.55)] ring-2 ring-rose-300/50 animate-pulse">
-                        <span className="absolute inset-0 flex items-center justify-center -rotate-45 text-[10px] font-black text-rose-950/90">
-                          !
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <motion.div
-                  className="absolute z-[5] -translate-x-1/2 -translate-y-1/2"
-                  style={{
-                    left: `${20 + laneRef.current * 30}%`,
-                    top: `${14 + (1 - prog) * 72}%`,
-                  }}
-                  layout
-                  transition={{ type: "spring", stiffness: 280, damping: 28 }}
-                >
-                  <div className="rounded-full p-0.5 ring-1 ring-cyan-400/30">
-                    {meR ? (
-                      <SwimmerAvatar
-                        colorTheme={meR.loadout.colorTheme}
-                        tailType={meR.loadout.tailType}
-                        auraEffect={meR.loadout.auraEffect}
-                        headgear={meR.loadout.headgear}
-                        faceExtra={meR.loadout.faceExtra}
-                        neckWear={meR.loadout.neckWear}
-                        size="sm"
-                        moving={racePhase === "racing"}
+                      <defs>
+                        <filter id={`ovum-race-rival-glow-${roomId}`} x="-50%" y="-50%" width="200%" height="200%">
+                          <feGaussianBlur stdDeviation="0.9" result="b" />
+                          <feMerge>
+                            <feMergeNode in="b" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+                      <line
+                        x1={20 + laneRef.current * 30}
+                        y1={14 + (1 - prog) * 72}
+                        x2={20 + botLaneVis * 30}
+                        y2={14 + (1 - botProg) * 72}
+                        stroke="rgba(250, 204, 21, 0.55)"
+                        strokeWidth="0.55"
+                        strokeDasharray="2 2.2"
+                        strokeLinecap="round"
+                        filter={`url(#ovum-race-rival-glow-${roomId})`}
                       />
-                    ) : null}
-                  </div>
-                </motion.div>
+                    </svg>
+                  ) : null}
 
-                {botR ? (
+                  {botR ? (
+                    <motion.div
+                      className="absolute z-[4] -translate-x-1/2 -translate-y-1/2"
+                      style={{
+                        left: `${20 + botLaneVis * 30}%`,
+                        top: `${14 + (1 - botProg) * 72}%`,
+                      }}
+                      transition={{ type: "spring", stiffness: 200, damping: 24 }}
+                    >
+                      <div className="rounded-full p-0.5 ring-1 ring-fuchsia-400/35">
+                        <SwimmerAvatar
+                          colorTheme={botR.loadout.colorTheme}
+                          tailType={botR.loadout.tailType}
+                          auraEffect={botR.loadout.auraEffect}
+                          headgear={botR.loadout.headgear}
+                          faceExtra={botR.loadout.faceExtra}
+                          neckWear={botR.loadout.neckWear}
+                          size="sm"
+                          moving={racePhase === "racing"}
+                        />
+                      </div>
+                    </motion.div>
+                  ) : null}
+
                   <motion.div
-                    className="absolute z-[4] -translate-x-1/2 -translate-y-1/2 opacity-80"
+                    className="absolute z-[5] -translate-x-1/2 -translate-y-1/2"
                     style={{
-                      left: `${20 + botLaneVis * 30}%`,
-                      top: `${14 + (1 - botProg) * 72}%`,
+                      left: `${20 + laneRef.current * 30}%`,
+                      top: `${14 + (1 - prog) * 72}%`,
                     }}
-                    transition={{ type: "spring", stiffness: 200, damping: 24 }}
+                    layout
+                    transition={{ type: "spring", stiffness: 280, damping: 28 }}
                   >
-                    <SwimmerAvatar
-                      colorTheme={botR.loadout.colorTheme}
-                      tailType={botR.loadout.tailType}
-                      auraEffect={botR.loadout.auraEffect}
-                      headgear={botR.loadout.headgear}
-                      faceExtra={botR.loadout.faceExtra}
-                      neckWear={botR.loadout.neckWear}
-                      size="sm"
-                      moving={racePhase === "racing"}
-                    />
+                    <div className="rounded-full bg-cyan-500/10 p-0.5 shadow-[0_0_20px_rgba(34,211,238,0.35)] ring-2 ring-cyan-300/50">
+                      {meR ? (
+                        <SwimmerAvatar
+                          colorTheme={meR.loadout.colorTheme}
+                          tailType={meR.loadout.tailType}
+                          auraEffect={meR.loadout.auraEffect}
+                          headgear={meR.loadout.headgear}
+                          faceExtra={meR.loadout.faceExtra}
+                          neckWear={meR.loadout.neckWear}
+                          size="sm"
+                          moving={racePhase === "racing"}
+                        />
+                      ) : null}
+                    </div>
                   </motion.div>
-                ) : null}
+                </div>
               </div>
 
               <AnimatePresence>
@@ -571,9 +657,16 @@ export function RaceClient({ roomId }: { roomId: string }) {
 
               <button
                 type="button"
-                className="absolute bottom-[max(1rem,env(safe-area-inset-bottom,0px))] left-1/2 z-20 h-16 w-16 min-h-[56px] min-w-[56px] -translate-x-1/2 touch-manipulation rounded-full border border-border bg-muted font-display text-xs font-semibold text-foreground md:hidden"
+                className="absolute bottom-[max(1rem,env(safe-area-inset-bottom,0px))] left-1/2 z-20 flex h-16 w-16 min-h-[56px] min-w-[56px] -translate-x-1/2 touch-manipulation items-center justify-center rounded-full border-2 border-cyan-400/50 bg-gradient-to-b from-zinc-800 to-black font-display text-xs font-bold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.35)] active:scale-95 md:hidden"
                 onPointerDown={onTapBoost}
               >
+                {boostFx > 0 ? (
+                  <span
+                    key={boostFx}
+                    className="animate-race-boost-ring pointer-events-none absolute inset-0 rounded-full border-2 border-amber-300/70"
+                    aria-hidden
+                  />
+                ) : null}
                 GO
               </button>
             </motion.div>

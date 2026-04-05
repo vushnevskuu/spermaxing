@@ -110,6 +110,37 @@
     animation: speed-lines 0.45s linear infinite;
   }
 
+  @keyframes race-hazard-pulse {
+    0%,
+    100% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.06);
+      opacity: 0.92;
+    }
+  }
+
+  .animate-race-hazard-pulse {
+    animation: race-hazard-pulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes race-boost-ring {
+    0% {
+      transform: scale(0.85);
+      opacity: 0.55;
+    }
+    100% {
+      transform: scale(1.35);
+      opacity: 0;
+    }
+  }
+
+  .animate-race-boost-ring {
+    animation: race-boost-ring 0.55s ease-out forwards;
+  }
+
   @keyframes egg-particle-drift {
     0%,
     100% {
@@ -125,7 +156,9 @@
 
   @media (prefers-reduced-motion: reduce) {
     .animate-grid-drift,
-    .animate-speed-lines {
+    .animate-speed-lines,
+    .animate-race-hazard-pulse,
+    .animate-race-boost-ring {
       animation: none;
     }
 
