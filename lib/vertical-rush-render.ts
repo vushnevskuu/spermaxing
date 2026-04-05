@@ -163,326 +163,467 @@ export function drawPlayerGroundGlow(ctx: CanvasRenderingContext2D, px: number, 
   ctx.fill();
 }
 
+/** Mineral sparkle: 4 long rays + short diagonal glints (reads as “pickup buff”). */
 function drawGoodZinc(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
-  const s = 1 + Math.sin(t) * 0.06;
+  const s = 1 + Math.sin(t) * 0.05;
   ctx.save();
   ctx.translate(x, y);
+  ctx.rotate(Math.sin(t * 0.4) * 0.12);
   ctx.scale(s, s);
-  ctx.fillStyle = "#a5f3fc";
   ctx.strokeStyle = "#22d3ee";
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = "round";
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -13);
+    ctx.stroke();
+    ctx.rotate(Math.PI / 2);
+  }
+  ctx.fillStyle = "#ecfeff";
+  ctx.beginPath();
+  ctx.arc(0, 0, 4, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = "#67e8f9";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(165,243,252,0.9)";
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.moveTo(-5, -5);
+  ctx.lineTo(5, 5);
+  ctx.moveTo(5, -5);
+  ctx.lineTo(-5, 5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Softgel capsule (omega-3 read) + tiny Ω curve on body. */
+function drawGoodOmega(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(t * 0.5) * 0.1);
+  ctx.fillStyle = "#7dd3fc";
+  ctx.strokeStyle = "#0284c7";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(0, -12);
-  ctx.lineTo(10, 0);
-  ctx.lineTo(0, 12);
-  ctx.lineTo(-10, 0);
+  ctx.ellipse(0, 0, 8, 14, 0, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.65)";
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-4, -3);
+  ctx.bezierCurveTo(-1, -7, 1, -7, 4, -3);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(-2, 2, 2.5, 4, -0.3, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Garlic bulb: wide base + 5 rounded cloves on top. */
+function drawGoodGarlic(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(t * 0.7) * 0.06);
+  ctx.fillStyle = "#fefce8";
+  ctx.strokeStyle = "#ca8a04";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 12);
+  ctx.bezierCurveTo(-12, 10, -12, -2, -8, -8);
+  ctx.bezierCurveTo(-4, -14, 4, -14, 8, -8);
+  ctx.bezierCurveTo(12, -2, 12, 10, 0, 12);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "#ecfeff";
+  for (let i = -2; i <= 2; i++) {
+    ctx.fillStyle = i === 0 ? "#fef08a" : "#fde047";
+    ctx.beginPath();
+    ctx.arc(i * 4.5, -10, 3.2, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "#eab308";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Donut: thick torus + dark hole (not a filled disc). */
+function drawGoodOnionRing(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(t * 0.35);
+  ctx.fillStyle = "#1a0a0a";
+  ctx.beginPath();
+  ctx.arc(0, 0, 5.5, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = "#facc15";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(0, 0, 11, 0, TAU);
+  ctx.stroke();
+  ctx.strokeStyle = "#fef08a";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.strokeStyle = "#a16207";
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.arc(0, 0, 7.5, 0, TAU);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Orange slice: semicircle with segment lines from center. */
+function drawGoodCitrus(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(t) * 0.12);
+  ctx.fillStyle = "#eab308";
+  ctx.strokeStyle = "#a16207";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 13, 0.15 * Math.PI, 0.85 * Math.PI, false);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(254,243,199,0.85)";
+  ctx.lineWidth = 1.25;
+  for (let i = 1; i <= 4; i++) {
+    const a = 0.15 * Math.PI + (i / 5) * 0.7 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a) * 12, Math.sin(a) * 12);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#fef9c3";
   ctx.beginPath();
   ctx.arc(0, 0, 3, 0, TAU);
   ctx.fill();
   ctx.restore();
 }
 
-function drawGoodOmega(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+/** Crisp bag + chips sticking out of top. */
+function drawBadChips(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.strokeStyle = "#38bdf8";
-  ctx.lineWidth = 3;
-  ctx.lineCap = "round";
-  const o = Math.sin(t * 1.2) * 2;
+  ctx.rotate(0.08 + Math.sin(t) * 0.04);
+  ctx.fillStyle = "#c4a574";
+  ctx.strokeStyle = "#78350f";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-12, 10);
+  ctx.lineTo(-10, -6);
+  ctx.lineTo(-6, -10);
+  ctx.lineTo(6, -10);
+  ctx.lineTo(10, -6);
+  ctx.lineTo(12, 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#d4a574";
   for (let i = 0; i < 3; i++) {
     ctx.beginPath();
-    const yy = -6 + i * 6 + o;
-    ctx.moveTo(-12, yy);
-    ctx.quadraticCurveTo(-4, yy - 4, 0, yy);
-    ctx.quadraticCurveTo(4, yy + 4, 12, yy);
+    ctx.ellipse(-4 + i * 4, -12 - (i % 2), 3.5, 2.2, (i - 1) * 0.3, 0, TAU);
+    ctx.fill();
     ctx.stroke();
   }
+  ctx.strokeStyle = "rgba(120,53,15,0.45)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-6, 2);
+  ctx.lineTo(6, 5);
+  ctx.stroke();
   ctx.restore();
 }
 
-function drawGoodGarlic(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+/** Wrapped candy: twisted paper ends + round center. */
+function drawBadCandy(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(Math.sin(t * 0.8) * 0.08);
-  ctx.fillStyle = "#fef9c3";
-  ctx.strokeStyle = "#eab308";
-  ctx.lineWidth = 2;
+  ctx.rotate(t * 0.35);
+  ctx.fillStyle = "#fbcfe8";
+  ctx.strokeStyle = "#9d174d";
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.ellipse(0, 2, 10, 12, 0, 0, TAU);
+  ctx.moveTo(-16, 0);
+  ctx.lineTo(-10, -5);
+  ctx.lineTo(-10, 5);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  for (let i = -1; i <= 1; i++) {
-    ctx.fillStyle = "#fde047";
+  ctx.beginPath();
+  ctx.moveTo(16, 0);
+  ctx.lineTo(10, -5);
+  ctx.lineTo(10, 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#f472b6";
+  ctx.strokeStyle = "#be185d";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 9, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.beginPath();
+  ctx.arc(-2, -2, 2.5, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Takeaway cup + lid + straw + bubbles. */
+function drawBadSoda(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "#0ea5e9";
+  ctx.strokeStyle = "#075985";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-9, 10);
+  ctx.lineTo(-7, -4);
+  ctx.lineTo(7, -4);
+  ctx.lineTo(9, 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#e0f2fe";
+  ctx.beginPath();
+  ctx.ellipse(0, -4, 9, 2.8, 0, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "#64748b";
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(5, -5);
+  ctx.lineTo(8 + Math.sin(t) * 1.5, -18);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  for (let i = 0; i < 3; i++) {
+    const oy = Math.sin(t * 2 + i) * 1.5;
     ctx.beginPath();
-    ctx.moveTo(i * 5, -8);
-    ctx.lineTo(i * 5 + 2, -18);
-    ctx.lineTo(i * 5 - 2, -18);
-    ctx.closePath();
+    ctx.arc(-3 + i * 3, 1 + oy, 1.4, 0, TAU);
     ctx.fill();
   }
   ctx.restore();
 }
 
-function drawGoodOnionRing(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(t * 0.4);
-  ctx.strokeStyle = "#facc15";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.arc(0, 0, 11, 0, TAU);
-  ctx.stroke();
-  ctx.strokeStyle = "#ca8a04";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = "rgba(254,240,138,0.4)";
-  ctx.beginPath();
-  ctx.arc(0, 0, 7, 0, TAU);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawGoodCitrus(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(Math.sin(t) * 0.15);
-  ctx.fillStyle = "#bef264";
-  ctx.strokeStyle = "#65a30d";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.arc(0, 0, 14, -0.4, Math.PI * 0.6, false);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#ecfccb";
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(10, -4);
-  ctx.lineTo(4, 8);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawBadChips(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(0.25 + Math.sin(t) * 0.05);
-  ctx.fillStyle = "#d4a574";
-  ctx.strokeStyle = "#92400e";
-  ctx.lineWidth = 2;
-  strokeRoundRect(ctx, -14, -8, 28, 16, 3);
-  ctx.fill();
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(120,53,15,0.5)";
-  ctx.lineWidth = 1;
-  for (let i = -8; i <= 8; i += 4) {
-    ctx.beginPath();
-    ctx.moveTo(i, -6);
-    ctx.lineTo(i + 2, 6);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawBadCandy(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(t * 0.5);
-  ctx.fillStyle = "#f472b6";
-  ctx.strokeStyle = "#db2777";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(0, 0, 12, 0, TAU);
-  ctx.fill();
-  ctx.stroke();
-  ctx.strokeStyle = "#fbcfe8";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(0, 0, 6, 0.2, Math.PI * 1.2);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawBadSoda(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = "#0ea5e9";
-  ctx.strokeStyle = "#0369a1";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(-8, -14);
-  ctx.lineTo(8, -14);
-  ctx.lineTo(10, 12);
-  ctx.lineTo(-10, 12);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.fillRect(-4, -6, 3, 14);
-  ctx.strokeStyle = "#64748b";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, -14);
-  ctx.lineTo(4 + Math.sin(t) * 2, -22);
-  ctx.stroke();
-  ctx.restore();
-}
-
+/** Fried ring: darker donut + grease drip + crackle. */
 function drawBadFriedRing(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(-0.2 + Math.sin(t * 0.9) * 0.1);
-  ctx.fillStyle = "#eab308";
-  ctx.strokeStyle = "#a16207";
-  ctx.lineWidth = 6;
+  ctx.rotate(-0.15 + Math.sin(t * 0.85) * 0.08);
+  ctx.fillStyle = "#292524";
   ctx.beginPath();
-  ctx.arc(0, 0, 11, 0, TAU);
-  ctx.stroke();
-  ctx.strokeStyle = "#713f12";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(0, 0, 11, 0, TAU);
-  ctx.stroke();
-  ctx.fillStyle = "rgba(253,224,71,0.5)";
-  ctx.beginPath();
-  ctx.arc(0, 0, 6, 0, TAU);
+  ctx.arc(0, 0, 5, 0, TAU);
   ctx.fill();
+  ctx.strokeStyle = "#b45309";
+  ctx.lineWidth = 5.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, 11, 0, TAU);
+  ctx.stroke();
+  ctx.strokeStyle = "#f59e0b";
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(69,26,3,0.7)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(6, 8);
+  ctx.quadraticCurveTo(8, 12, 7, 14);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-8, 3);
+  ctx.lineTo(-5, 5);
+  ctx.moveTo(4, -6);
+  ctx.lineTo(7, -4);
+  ctx.stroke();
   ctx.restore();
 }
 
+/** Isometric cube: three visible faces. */
 function drawBadSugarCube(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
-  const s = 1 + Math.sin(t * 1.4) * 0.04;
+  const s = 1 + Math.sin(t * 1.2) * 0.03;
   ctx.scale(s, s);
-  ctx.fillStyle = "#f1f5f9";
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = 2;
+  ctx.fillStyle = "#f8fafc";
+  ctx.strokeStyle = "#64748b";
+  ctx.lineWidth = 1.75;
   ctx.beginPath();
-  ctx.moveTo(0, -10);
-  ctx.lineTo(12, -4);
-  ctx.lineTo(12, 8);
+  ctx.moveTo(0, -8);
+  ctx.lineTo(11, -2);
+  ctx.lineTo(11, 8);
   ctx.lineTo(0, 14);
-  ctx.lineTo(-12, 8);
-  ctx.lineTo(-12, -4);
+  ctx.lineTo(-11, 8);
+  ctx.lineTo(-11, -2);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = "rgba(148,163,184,0.6)";
+  ctx.fillStyle = "#e2e8f0";
   ctx.beginPath();
-  ctx.moveTo(0, -10);
+  ctx.moveTo(0, -8);
+  ctx.lineTo(11, -2);
+  ctx.lineTo(0, 4);
+  ctx.lineTo(-11, -2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#94a3b8";
+  ctx.stroke();
+  ctx.fillStyle = "#cbd5e1";
+  ctx.beginPath();
+  ctx.moveTo(0, 4);
+  ctx.lineTo(11, 8);
   ctx.lineTo(0, 14);
-  ctx.moveTo(-12, -4);
-  ctx.lineTo(12, -4);
+  ctx.lineTo(-11, 8);
+  ctx.closePath();
+  ctx.fill();
   ctx.stroke();
   ctx.restore();
 }
 
+/** Laptop: screen + hinge gap + keyboard deck (clear silhouette). */
 function drawObsLaptop(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = "#334155";
+  ctx.fillStyle = "#1e293b";
   ctx.strokeStyle = "#0f172a";
   ctx.lineWidth = 2;
-  strokeRoundRect(ctx, -16, -12, 32, 22, 2);
+  strokeRoundRect(ctx, -15, -14, 30, 20, 2);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = "#22d3ee";
-  ctx.globalAlpha = 0.35 + Math.sin(t * 2) * 0.1;
-  ctx.fillRect(-12, -8, 24, 14);
+  ctx.globalAlpha = 0.4 + Math.sin(t * 2) * 0.08;
+  ctx.fillRect(-11, -10, 22, 12);
   ctx.globalAlpha = 1;
-  ctx.fillStyle = "#475569";
-  ctx.fillRect(-20, 10, 40, 5);
-  ctx.strokeRect(-20, 10, 40, 5);
-  ctx.restore();
-}
-
-function drawObsShower(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.strokeStyle = "#64748b";
-  ctx.lineWidth = 3;
+  ctx.fillStyle = "#334155";
   ctx.beginPath();
-  ctx.moveTo(-14, -18);
-  ctx.lineTo(14, -18);
+  ctx.moveTo(-22, 8);
+  ctx.lineTo(22, 8);
+  ctx.lineTo(20, 14);
+  ctx.lineTo(-20, 14);
+  ctx.closePath();
+  ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = "#38bdf8";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#475569";
+  ctx.lineWidth = 1;
   for (let i = -2; i <= 2; i++) {
-    const off = (t * 3 + i) % 4;
     ctx.beginPath();
-    ctx.moveTo(i * 6, -14);
-    ctx.lineTo(i * 6 + off, 14);
+    ctx.moveTo(i * 7, 10);
+    ctx.lineTo(i * 7 + 4, 10);
     ctx.stroke();
   }
   ctx.restore();
 }
 
+/** Shower head arc + dotted spray. */
+function drawObsShower(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = "#94a3b8";
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(0, -8, 12, Math.PI * 0.15, Math.PI * 0.85);
+  ctx.stroke();
+  ctx.fillStyle = "#64748b";
+  for (let a = 0.25 * Math.PI; a <= 0.75 * Math.PI; a += 0.12) {
+    const hx = Math.cos(a) * 12;
+    const hy = -8 + Math.sin(a) * 12;
+    ctx.beginPath();
+    ctx.arc(hx, hy, 1.1, 0, TAU);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#38bdf8";
+  for (let i = -3; i <= 3; i++) {
+    const ph = (t * 3.2 + i * 0.7) % 3.5;
+    ctx.globalAlpha = 0.35 + ph * 0.15;
+    ctx.beginPath();
+    ctx.arc(i * 4.2, -2 + ph * 9, 1.6, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/** Belt strap horizontal + rectangular buckle. */
 function drawObsBelt(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
-  ctx.translate(x + Math.sin(t) * 0.6, y);
-  ctx.fillStyle = "#57534e";
+  ctx.translate(x + Math.sin(t) * 0.5, y);
+  ctx.fillStyle = "#44403c";
+  ctx.fillRect(-20, -4, 40, 8);
+  ctx.strokeStyle = "#1c1917";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-20, -4, 40, 8);
+  ctx.fillStyle = "#a8a29e";
   ctx.strokeStyle = "#292524";
-  ctx.lineWidth = 2;
-  strokeRoundRect(ctx, -18, -6, 36, 12, 2);
+  ctx.lineWidth = 1.5;
+  strokeRoundRect(ctx, -7, -6, 14, 12, 2);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "#d6d3d1";
-  ctx.strokeStyle = "#44403c";
+  ctx.fillStyle = "#57534e";
   ctx.beginPath();
-  ctx.rect(-5, -4, 10, 8);
+  ctx.arc(0, 0, 2.2, 0, TAU);
   ctx.fill();
-  ctx.stroke();
   ctx.strokeStyle = "#78716c";
-  ctx.setLineDash([3, 3]);
+  ctx.setLineDash([2, 3]);
   ctx.beginPath();
-  ctx.moveTo(-16, 0);
-  ctx.lineTo(16, 0);
+  ctx.moveTo(-18, 0);
+  ctx.lineTo(-9, 0);
+  ctx.moveTo(9, 0);
+  ctx.lineTo(18, 0);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();
 }
 
+/** Tight knot ball (interleaved loops). */
 function drawObsStress(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.strokeStyle = "#a855f7";
-  ctx.lineWidth = 3;
+  ctx.rotate(Math.sin(t * 0.8) * 0.08);
+  ctx.strokeStyle = "#7e22ce";
+  ctx.lineWidth = 2.5;
   ctx.lineCap = "round";
-  const w = Math.sin(t * 1.5) * 3;
-  ctx.beginPath();
-  ctx.moveTo(-14, -8 + w);
-  for (let i = 0; i < 5; i++) {
-    ctx.lineTo(-14 + i * 7, i % 2 === 0 ? 8 + w : -8 + w);
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 10, 6, (i * Math.PI) / 3, 0, TAU);
+    ctx.stroke();
   }
-  ctx.stroke();
   ctx.strokeStyle = "#c084fc";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(-10, 4);
-  ctx.quadraticCurveTo(0, -12, 10, 4);
+  ctx.arc(0, 0, 4, 0, TAU);
   ctx.stroke();
   ctx.restore();
 }
 
+/** Wind gust curves + dust motes. */
 function drawObsDryWind(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.strokeStyle = "#a8a29e";
+  ctx.strokeStyle = "#d6d3d1";
   ctx.lineWidth = 2;
-  for (let i = 0; i < 5; i++) {
-    const yy = -10 + i * 5;
-    const sh = ((t * 40 + i * 12) % 28) - 14;
+  ctx.lineCap = "round";
+  const o = (t * 28) % 20;
+  for (let i = 0; i < 3; i++) {
     ctx.beginPath();
-    ctx.moveTo(-16 + sh, yy);
-    ctx.lineTo(16 + sh, yy);
+    ctx.moveTo(-14 + o * 0.3, -8 + i * 8);
+    ctx.bezierCurveTo(-4 + o * 0.2, -10 + i * 8, 4, -4 + i * 8, 14 + o * 0.15, -6 + i * 8);
     ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(168,162,158,0.75)";
+  for (let i = 0; i < 6; i++) {
+    const px = ((i * 17 + o * 2) % 26) - 13;
+    const py = ((i * 23) % 18) - 9;
+    ctx.beginPath();
+    ctx.arc(px, py, 1.1, 0, TAU);
+    ctx.fill();
   }
   ctx.restore();
 }
