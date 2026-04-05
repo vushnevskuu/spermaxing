@@ -1,5 +1,6 @@
 /**
  * Procedural OVUM-style climb art: neon tunnel, readable pickups (no external bitmaps).
+ * Иконки на треке — здесь (`drawPickupOrObstacle`). После подбора на персонаже — `SwimmerRushEquippedLayers` / `RushEquippedFlags`.
  */
 
 import { BAD_ITEMS, GOOD_ITEMS, OBSTACLES, type BadId, type GoodId, type ObstacleId } from "@/lib/vertical-rush-catalog";
@@ -121,34 +122,6 @@ export function drawVerticalRushBackground(
   ctx.fillRect(0, 0, W, H);
 }
 
-export function drawLaneDividers(ctx: CanvasRenderingContext2D, W: number, H: number, lanes: number, nowMs: number) {
-  const dash = 10 + (nowMs * 0.012) % 7;
-  for (let L = 1; L < lanes; L++) {
-    const x = L * (W / lanes);
-    const lg = ctx.createLinearGradient(x - 3, 0, x + 3, 0);
-    lg.addColorStop(0, "rgba(34, 211, 238, 0)");
-    lg.addColorStop(0.5, "rgba(216, 180, 254, 0.42)");
-    lg.addColorStop(1, "rgba(34, 211, 238, 0)");
-    ctx.strokeStyle = lg;
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = "rgba(34, 211, 238, 0.35)";
-    ctx.shadowBlur = 6;
-    ctx.setLineDash([dash, 7]);
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.setLineDash([]);
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
-    ctx.stroke();
-  }
-}
-
 /** Ground glow under the HTML SwimmerAvatar (reads as “hover” in the tunnel). */
 export function drawPlayerGroundGlow(ctx: CanvasRenderingContext2D, px: number, py: number, nowMs: number) {
   const pulse = 0.85 + Math.sin(nowMs * 0.006) * 0.12;
@@ -161,6 +134,78 @@ export function drawPlayerGroundGlow(ctx: CanvasRenderingContext2D, px: number, 
   ctx.beginPath();
   ctx.ellipse(px, py + 8, 32 * pulse, 14 * pulse, 0, 0, TAU);
   ctx.fill();
+}
+
+/** Оранжевый шлейф «кометы» под игроком (режим Citrus). */
+export function drawCitrusCometTrail(ctx: CanvasRenderingContext2D, px: number, py: number, nowMs: number) {
+  const t = nowMs * 0.007;
+  for (let i = 0; i < 6; i++) {
+    const oy = 10 + i * 13 + Math.sin(t + i * 0.7) * 5;
+    const ox = Math.sin(t * 0.55 + i * 1.1) * 8;
+    const alpha = Math.max(0.08, 0.5 - i * 0.065);
+    const r = 22 - i * 2.8;
+    const g = ctx.createRadialGradient(px + ox, py + oy, 0, px + ox, py + oy, r);
+    g.addColorStop(0, `rgba(253, 186, 116, ${alpha})`);
+    g.addColorStop(0.45, `rgba(249, 115, 22, ${alpha * 0.55})`);
+    g.addColorStop(1, "rgba(234, 88, 12, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(px + ox, py + oy, r, r * 0.55, Math.sin(t + i) * 0.15, 0, TAU);
+    ctx.fill();
+  }
+  const pulse = 0.9 + Math.sin(nowMs * 0.014) * 0.1;
+  const core = ctx.createRadialGradient(px, py + 4, 0, px, py + 4, 36 * pulse);
+  core.addColorStop(0, "rgba(254, 215, 170, 0.55)");
+  core.addColorStop(0.4, "rgba(251, 146, 60, 0.35)");
+  core.addColorStop(1, "rgba(234, 88, 12, 0)");
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.ellipse(px, py + 6, 30 * pulse, 13 * pulse, 0, 0, TAU);
+  ctx.fill();
+}
+
+/**
+ * NPC swimmer swimming down-track (head toward player). Cartoon, non-explicit.
+ */
+export function drawRivalSwimmer(ctx: CanvasRenderingContext2D, cx: number, cy: number, nowMs: number) {
+  const t = nowMs * 0.0035;
+  const wob = Math.sin(t * 1.1) * 1.8;
+  ctx.save();
+  ctx.translate(cx, cy + wob);
+  ctx.strokeStyle = "rgba(251, 113, 133, 0.55)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.arc(0, 0, 26, 0, TAU);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#94a3b8";
+  ctx.strokeStyle = "#64748b";
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.ellipse(0, 9, 15, 12, 0, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#e2e8f0";
+  ctx.beginPath();
+  ctx.arc(-5, 6, 4, 0, TAU);
+  ctx.arc(6, 6, 4, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = "#0f172a";
+  ctx.beginPath();
+  ctx.arc(-4.5, 6.5, 1.6, 0, TAU);
+  ctx.arc(6.5, 6.5, 1.6, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = "#cbd5e1";
+  ctx.strokeStyle = "#94a3b8";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -4);
+  ctx.quadraticCurveTo(22 + Math.sin(t * 1.4) * 3, -18, 28, -6);
+  ctx.quadraticCurveTo(14, 2, 0, -4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** Mineral sparkle: 4 long rays + short diagonal glints (reads as “pickup buff”). */

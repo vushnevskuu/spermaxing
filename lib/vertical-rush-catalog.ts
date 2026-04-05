@@ -13,11 +13,11 @@ export const GOOD_ITEMS: {
   hint: string;
   color: string;
 }[] = [
-  { id: "zinc", label: "Zinc sparkle", hint: "+HP", color: "#a5f3fc" },
-  { id: "omega", label: "Omega wave", hint: "+speed", color: "#7dd3fc" },
-  { id: "garlic", label: "Garlic ward", hint: "+armor / toughness", color: "#fef08a" },
-  { id: "onion_ring", label: "Onion ring", hint: "+max HP", color: "#fde047" },
-  { id: "citrus", label: "Citrus zap", hint: "unlocks shooting", color: "#bef264" },
+  { id: "zinc", label: "Zinc sparkle", hint: "+HP & speed, grey face — collect up to 5", color: "#a5f3fc" },
+  { id: "omega", label: "Omega wave", hint: "+speed; yellow bubble blocks 2 bumps", color: "#7dd3fc" },
+  { id: "garlic", label: "Garlic ward", hint: "rare: +max HP, heal, armor — up to 5", color: "#fef08a" },
+  { id: "onion_ring", label: "Onion ring", hint: "+max HP; green whiff blocks 1 bump", color: "#fde047" },
+  { id: "citrus", label: "Citrus zap", hint: "2s comet: invincible, super speed, smash walls/rivals + shots", color: "#bef264" },
 ];
 
 export const BAD_ITEMS: {

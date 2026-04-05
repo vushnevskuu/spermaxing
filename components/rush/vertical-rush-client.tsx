@@ -7,12 +7,14 @@ import { isSupabaseConfigured } from "@/lib/mock-mode";
 import { SwimmerAvatar } from "@/components/avatar/swimmer-avatar";
 import { Button } from "@/components/ui/button";
 import { BAD_ITEMS, GOOD_ITEMS, OBSTACLES, type BadId, type GoodId, type ObstacleId } from "@/lib/vertical-rush-catalog";
+import { createEmptyRushEquipped } from "@/lib/vertical-rush-equipped";
 import { loadLocalProfile, type StoredProfile } from "@/lib/local-profile";
 import {
-  drawLaneDividers,
+  drawCitrusCometTrail,
   drawPickupOrObstacle,
   drawPlayerGroundGlow,
   drawProjectile,
+  drawRivalSwimmer,
   drawVerticalRushBackground,
 } from "@/lib/vertical-rush-render";
 
@@ -20,17 +22,48 @@ const W = 360;
 const H = 640;
 const LANES = 3;
 const PLAYER_Y = H * 0.78;
-const COLL = 38;
+/** World units along track per pixel of vertical screen offset (see screenY formula). */
+const TRACK_SCALE = 0.92;
+/** Pickups align with SwimmerAvatar head above body center (px). */
+const HEAD_OFFSET_PX = 26;
+const HEAD_WORLD = HEAD_OFFSET_PX / TRACK_SCALE;
+const COLL_HEAD = 15;
+const COLL_BODY = 38;
+const LANE_HEAD = 0.36;
+const LANE_BODY = 0.42;
+const RIVAL_DESCENT = 158;
+const RIVAL_BUMP_HP = 12;
 const BASE_SPEED = 195;
 const METERS_SCALE = 1 / 12;
+const MAX_SWEET_STACK = 12;
+const MAX_ZINC_STACK = 5;
+const MAX_GARLIC_STACK = 5;
+const CITRUS_FRENZY_MS = 2000;
 
-type Ent = {
-  at: number;
-  lane: number;
-  kind: "good" | "bad" | "obs";
-  id: GoodId | BadId | ObstacleId;
-  consumed: boolean;
-};
+function pickGoodSpawnId(g: { zincCount: number; garlicCount: number; rand: () => number }): GoodId {
+  type Row = { id: GoodId; w: number };
+  const rows: Row[] = [
+    { id: "zinc", w: g.zincCount >= MAX_ZINC_STACK ? 0 : 0.28 },
+    { id: "omega", w: 0.24 },
+    { id: "garlic", w: g.garlicCount >= MAX_GARLIC_STACK ? 0 : 0.07 },
+    { id: "onion_ring", w: 0.21 },
+    { id: "citrus", w: 0.24 },
+  ];
+  const total = rows.reduce((s, x) => s + x.w, 0);
+  if (total <= 0) return "citrus";
+  let r = g.rand() * total;
+  for (const row of rows) {
+    r -= row.w;
+    if (r <= 0) return row.id;
+  }
+  return "citrus";
+}
+
+type Ent =
+  | { at: number; lane: number; kind: "good"; id: GoodId; consumed: boolean }
+  | { at: number; lane: number; kind: "bad"; id: BadId; consumed: boolean }
+  | { at: number; lane: number; kind: "obs"; id: ObstacleId; consumed: boolean }
+  | { at: number; lane: number; kind: "rival"; consumed: boolean; wobbleSeed: number; baseLane: number };
 
 type Proj = { pos: number; lane: number };
 
@@ -69,6 +102,15 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     ammo: 0,
     canShoot: false,
     toast: "" as string,
+    /** Надетые пикапы на аватаре (не путать с иконками на canvas-треке). */
+    rushEquipped: createEmptyRushEquipped(),
+    /** Сладкое (candy/soda/sugar): больше глаз + быстрее зрачки. */
+    sweetStack: 0,
+    onionShieldCharges: 0,
+    omegaShieldCharges: 0,
+    zincCount: 0,
+    garlicCount: 0,
+    citrusComet: false,
   });
   const [bestLocal, setBestLocal] = useState(0);
   const [savedCloud, setSavedCloud] = useState<string | null>(null);
@@ -91,6 +133,13 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     toastUntil: 0,
     toastText: "",
     lastHud: 0,
+    rushEquipped: createEmptyRushEquipped(),
+    sweetStack: 0,
+    onionShieldCharges: 0,
+    omegaShieldCharges: 0,
+    zincCount: 0,
+    garlicCount: 0,
+    citrusFrenzyUntil: 0,
   });
 
   useEffect(() => {
@@ -126,34 +175,101 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     g.toastUntil = performance.now() + 2200;
   };
 
+  const syncRushHud = (g: typeof game.current) => {
+    const now = performance.now();
+    setHud((h) => ({
+      ...h,
+      rushEquipped: { ...g.rushEquipped },
+      sweetStack: g.sweetStack,
+      onionShieldCharges: g.onionShieldCharges,
+      omegaShieldCharges: g.omegaShieldCharges,
+      zincCount: g.zincCount,
+      garlicCount: g.garlicCount,
+      citrusComet: now < g.citrusFrenzyUntil,
+    }));
+  };
+
+  /**
+   * Удар соперника / стена: щиты стакаются независимо. Если активны оба — случайно тратится заряд лука или омеги
+   * (нет фиксированного порядка).
+   */
+  const tryAbsorbBump = (g: typeof game.current): boolean => {
+    const o = g.onionShieldCharges > 0;
+    const w = g.omegaShieldCharges > 0;
+    if (!o && !w) return false;
+    if (o && !w) {
+      g.onionShieldCharges -= 1;
+      pushToast(g, "Onion whiff blocked the hit!");
+    } else if (!o && w) {
+      g.omegaShieldCharges -= 1;
+      pushToast(g, "Omega bubble soaked it!");
+    } else {
+      if (g.rand() < 0.5) {
+        g.onionShieldCharges -= 1;
+        pushToast(g, "Onion whiff blocked the hit!");
+      } else {
+        g.omegaShieldCharges -= 1;
+        pushToast(g, "Omega bubble soaked it!");
+      }
+    }
+    syncRushHud(g);
+    return true;
+  };
+
   const applyGood = (g: typeof game.current, id: GoodId) => {
+    g.rushEquipped[id] = true;
     switch (id) {
       case "zinc":
+        if (g.zincCount >= MAX_ZINC_STACK) {
+          g.hp = Math.min(g.maxHp, g.hp + 6);
+          pushToast(g, "Zinc faded (+HP only)");
+          break;
+        }
+        g.zincCount += 1;
         g.hp = Math.min(g.maxHp, g.hp + 18);
-        pushToast(g, "Zinc: +HP");
+        g.speedMult = Math.min(1.9, g.speedMult * 1.085);
+        pushToast(g, `Zinc ${g.zincCount}/${MAX_ZINC_STACK}: +HP · faster`);
         break;
       case "omega":
         g.speedMult = Math.min(1.55, g.speedMult * 1.12);
-        pushToast(g, "Omega: +speed");
+        g.omegaShieldCharges = 2;
+        pushToast(g, "Omega: +speed · bubble ×2");
         break;
       case "garlic":
-        g.armor = Math.min(0.45, g.armor + 0.12);
-        pushToast(g, "Garlic: +toughness");
+        if (g.garlicCount >= MAX_GARLIC_STACK) {
+          g.hp = Math.min(g.maxHp, g.hp + 10);
+          pushToast(g, "Garlic maxed — small heal");
+          break;
+        }
+        g.garlicCount += 1;
+        g.maxHp += 10;
+        g.hp = Math.min(g.maxHp, g.hp + 26);
+        g.armor = Math.min(0.45, g.armor + 0.1);
+        pushToast(g, `Garlic ${g.garlicCount}/${MAX_GARLIC_STACK}: +max HP & heal`);
         break;
       case "onion_ring":
         g.maxHp += 12;
         g.hp = Math.min(g.maxHp, g.hp + 8);
-        pushToast(g, "Onion ring: +max HP");
+        g.onionShieldCharges = 1;
+        pushToast(g, "Onion ring: +max HP · whiff ×1");
         break;
-      case "citrus":
+      case "citrus": {
+        const t = performance.now();
         g.canShoot = true;
         g.ammo = Math.min(99, g.ammo + 6);
-        pushToast(g, "Citrus: shots unlocked!");
+        g.citrusFrenzyUntil = t + CITRUS_FRENZY_MS;
+        pushToast(g, "Citrus comet! 2s invincible · smash!");
         break;
+      }
     }
+    syncRushHud(g);
   };
 
   const applyBad = (g: typeof game.current, id: BadId) => {
+    g.rushEquipped[id] = true;
+    if (id === "candy" || id === "soda" || id === "sugar_cube") {
+      g.sweetStack = Math.min(MAX_SWEET_STACK, g.sweetStack + 1);
+    }
     switch (id) {
       case "chips":
         g.speedMult = Math.max(0.55, g.speedMult * 0.88);
@@ -180,30 +296,48 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         pushToast(g, "Sugar crash!");
         break;
     }
+    syncRushHud(g);
   };
 
   const spawnEntity = (g: typeof game.current) => {
     const lane = Math.floor(g.rand() * LANES);
     const roll = g.rand();
-    let kind: Ent["kind"];
-    let id: GoodId | BadId | ObstacleId;
-    if (roll < 0.28) {
-      kind = "good";
-      id = GOOD_ITEMS[Math.floor(g.rand() * GOOD_ITEMS.length)].id;
-    } else if (roll < 0.52) {
-      kind = "bad";
-      id = BAD_ITEMS[Math.floor(g.rand() * BAD_ITEMS.length)].id;
+    const at = g.scroll + 520 + g.rand() * 180;
+    if (roll < 0.13) {
+      const baseLane = g.rand() * (LANES - 1);
+      g.entities.push({
+        at: g.scroll + 380 + g.rand() * 220,
+        lane: baseLane,
+        baseLane,
+        kind: "rival",
+        consumed: false,
+        wobbleSeed: g.rand() * 12.56,
+      });
+    } else if (roll < 0.39) {
+      g.entities.push({
+        at,
+        lane,
+        kind: "good",
+        id: pickGoodSpawnId(g),
+        consumed: false,
+      });
+    } else if (roll < 0.65) {
+      g.entities.push({
+        at,
+        lane,
+        kind: "bad",
+        id: BAD_ITEMS[Math.floor(g.rand() * BAD_ITEMS.length)].id,
+        consumed: false,
+      });
     } else {
-      kind = "obs";
-      id = OBSTACLES[Math.floor(g.rand() * OBSTACLES.length)].id;
+      g.entities.push({
+        at,
+        lane,
+        kind: "obs",
+        id: OBSTACLES[Math.floor(g.rand() * OBSTACLES.length)].id,
+        consumed: false,
+      });
     }
-    g.entities.push({
-      at: g.scroll + 520 + g.rand() * 180,
-      lane,
-      kind,
-      id,
-      consumed: false,
-    });
     g.nextSpawn = Math.max(g.nextSpawn, g.scroll) + 95 + g.rand() * 70;
   };
 
@@ -225,7 +359,28 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     g.rand = mulberry32((Date.now() ^ (Math.random() * 1e9)) | 0);
     g.toastUntil = 0;
     g.toastText = "";
-    setHud({ m: 0, hp: 100, maxHp: 100, ammo: 0, canShoot: false, toast: "" });
+    g.rushEquipped = createEmptyRushEquipped();
+    g.sweetStack = 0;
+    g.onionShieldCharges = 0;
+    g.omegaShieldCharges = 0;
+    g.zincCount = 0;
+    g.garlicCount = 0;
+    g.citrusFrenzyUntil = 0;
+    setHud({
+      m: 0,
+      hp: 100,
+      maxHp: 100,
+      ammo: 0,
+      canShoot: false,
+      toast: "",
+      rushEquipped: createEmptyRushEquipped(),
+      sweetStack: 0,
+      onionShieldCharges: 0,
+      omegaShieldCharges: 0,
+      zincCount: 0,
+      garlicCount: 0,
+      citrusComet: false,
+    });
     setPhase("play");
     setSavedCloud(null);
   }, []);
@@ -315,10 +470,13 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
 
-      if (keys["ArrowLeft"] && now > g.stunUntil) {
+      const citrusFrenzy = now < g.citrusFrenzyUntil;
+      if (citrusFrenzy && g.hp < 1) g.hp = 1;
+
+      if (keys["ArrowLeft"] && (citrusFrenzy || now > g.stunUntil)) {
         g.laneF = Math.max(0, g.laneF - 2.4 * dt);
       }
-      if (keys["ArrowRight"] && now > g.stunUntil) {
+      if (keys["ArrowRight"] && (citrusFrenzy || now > g.stunUntil)) {
         g.laneF = Math.min(LANES - 1, g.laneF + 2.4 * dt);
       }
       if (keys["Space"]) {
@@ -327,41 +485,72 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       }
 
       let sm = g.speedMult;
-      if (now < g.slowUntil) sm *= 0.72;
+      if (citrusFrenzy) sm *= 2.35;
+      else if (now < g.slowUntil) sm *= 0.72;
 
       const v = BASE_SPEED * sm;
       g.scroll += v * dt;
 
       while (g.scroll + 400 > g.nextSpawn) spawnEntity(g);
 
-      g.entities = g.entities.filter((e) => e.at > g.scroll - 120);
+      g.entities = g.entities.filter((e) => e.at > g.scroll - 200);
 
       const px = laneCenterX(g.laneF);
       const py = PLAYER_Y;
 
       for (const e of g.entities) {
         if (e.consumed) continue;
-        if (Math.abs(e.at - g.scroll) > COLL) continue;
-        if (Math.abs(e.lane - g.laneF) > 0.42) continue;
-        e.consumed = true;
-        if (e.kind === "good") applyGood(g, e.id as GoodId);
-        else if (e.kind === "bad") applyBad(g, e.id as BadId);
-        else {
-          const obs = OBSTACLES.find((o) => o.id === e.id);
-          const dmg = Math.max(1, Math.round((obs?.damage ?? 10) * (1 - g.armor)));
-          g.hp -= dmg;
-          pushToast(g, `Hit! −${dmg} HP`);
+
+        if (e.kind === "rival") {
+          e.lane = Math.max(0, Math.min(LANES - 1, e.baseLane + Math.sin(now * 0.0028 + e.wobbleSeed) * 0.82));
+          e.at -= RIVAL_DESCENT * dt;
+          if (Math.abs(e.at - g.scroll - HEAD_WORLD) > 20) continue;
+          if (Math.abs(e.lane - g.laneF) > 0.38) continue;
+          e.consumed = true;
+          if (citrusFrenzy) {
+            /* комета сносит соперника без урона */
+          } else if (!tryAbsorbBump(g)) {
+            g.hp -= RIVAL_BUMP_HP;
+            pushToast(g, `Rival bump! −${RIVAL_BUMP_HP} HP`);
+          }
+          continue;
+        }
+
+        if (e.kind === "good" || e.kind === "bad") {
+          if (Math.abs(e.at - g.scroll - HEAD_WORLD) > COLL_HEAD) continue;
+          if (Math.abs(e.lane - g.laneF) > LANE_HEAD) continue;
+          e.consumed = true;
+          if (e.kind === "good") applyGood(g, e.id);
+          else if (citrusFrenzy) {
+            /* мусор не цепляет комету */
+          } else applyBad(g, e.id);
+          continue;
+        }
+
+        if (e.kind === "obs") {
+          if (Math.abs(e.at - g.scroll) > COLL_BODY) continue;
+          if (Math.abs(e.lane - g.laneF) > LANE_BODY) continue;
+          e.consumed = true;
+          if (citrusFrenzy) {
+            /* стена разносится */
+          } else if (!tryAbsorbBump(g)) {
+            const obs = OBSTACLES.find((o) => o.id === e.id);
+            const dmg = Math.max(1, Math.round((obs?.damage ?? 10) * (1 - g.armor)));
+            g.hp -= dmg;
+            pushToast(g, `Hit! −${dmg} HP`);
+          }
         }
       }
 
       g.projectiles = g.projectiles.filter((p) => {
         p.pos += 520 * dt;
         for (const e of g.entities) {
-          if (e.consumed || e.kind !== "obs") continue;
+          if (e.consumed) continue;
+          if (e.kind !== "obs" && e.kind !== "rival") continue;
           if (Math.abs(e.lane - p.lane) > 0.35) continue;
           if (p.pos >= e.at - 20 && p.pos <= e.at + 40) {
             e.consumed = true;
-            pushToast(g, "Obstacle cleared!");
+            pushToast(g, e.kind === "rival" ? "Rival zapped!" : "Obstacle cleared!");
             return false;
           }
         }
@@ -411,27 +600,41 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           ammo: g.ammo,
           canShoot: g.canShoot,
           toast,
+          rushEquipped: { ...g.rushEquipped },
+          sweetStack: g.sweetStack,
+          onionShieldCharges: g.onionShieldCharges,
+          omegaShieldCharges: g.omegaShieldCharges,
+          zincCount: g.zincCount,
+          garlicCount: g.garlicCount,
+          citrusComet: now < g.citrusFrenzyUntil,
         });
       }
 
       drawVerticalRushBackground(ctx, W, H, g.scroll, now);
-      drawLaneDividers(ctx, W, H, LANES, now);
 
       for (const e of g.entities) {
         if (e.consumed) continue;
-        const screenY = PLAYER_Y - (e.at - g.scroll) * 0.92;
+        const screenY = PLAYER_Y - (e.at - g.scroll) * TRACK_SCALE;
         if (screenY < -48 || screenY > H + 48) continue;
         const cx = laneCenterX(e.lane);
-        drawPickupOrObstacle(ctx, e.kind, e.id, cx, screenY, now);
+        if (e.kind === "rival") {
+          drawRivalSwimmer(ctx, cx, screenY, now);
+        } else {
+          drawPickupOrObstacle(ctx, e.kind, e.id, cx, screenY, now);
+        }
       }
 
       for (const p of g.projectiles) {
-        const screenY = PLAYER_Y - (p.pos - g.scroll) * 0.92;
+        const screenY = PLAYER_Y - (p.pos - g.scroll) * TRACK_SCALE;
         const cx = laneCenterX(p.lane);
         drawProjectile(ctx, cx, screenY, now);
       }
 
-      drawPlayerGroundGlow(ctx, px, py, now);
+      if (citrusFrenzy) {
+        drawCitrusCometTrail(ctx, px, py, now);
+      } else {
+        drawPlayerGroundGlow(ctx, px, py, now);
+      }
       const slot = playerSlotRef.current;
       if (slot) {
         slot.style.left = `${(laneCenterX(g.laneF) / W) * 100}%`;
@@ -534,9 +737,9 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
       {!embed ? (
         <p className="text-center text-[11px] leading-snug text-muted-foreground">
-          Nokia-style climb: you move up through lanes. Buffs (cyan ring), junk debuffs (pink dashed ring), and
-          red-framed walls hurt on contact. Arrows strafe · Space shoots after Citrus. Parody wellness props only — not
-          medical advice.
+          Nokia-style climb: strafe lanes. Zinc (up to 5) greys your swimmer and stacks speed; Garlic is rarer (up to 5)
+          for max HP & heal. Citrus = 2s orange comet: invincible, vaporize walls & rivals, super speed + shots. Parody
+          props — not medical advice.
         </p>
       ) : null}
 
@@ -571,6 +774,13 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           <p className="text-sm text-muted-foreground">Best run (this device): {bestLocal} m</p>
           <div className="w-full max-w-sm space-y-3 rounded-lg border border-purple-500/25 bg-card/40 px-3 py-3 text-left text-[10px] leading-relaxed text-muted-foreground">
             <p className="font-semibold text-foreground/90">On the track</p>
+            <p className="text-foreground/70">
+              Buffs and junk count only if your head touches them — the tail does nothing. Rivals (grey swimmer + pink
+              warning ring) and red obstacle walls cost HP on bump unless a shield charge absorbs it (Onion whiff or
+              Omega bubble stack; if both are up, which one pops is random). Candy / soda / sugar stack: bigger eyes and
+              faster pupils — parody
+              only, not medical advice.
+            </p>
             <div>
               <p className="mb-1 font-medium text-cyan-300/90">Buffs (cyan outline)</p>
               <ul className="list-inside list-disc space-y-0.5">
@@ -653,6 +863,12 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
                     size="lg"
                     facingDeg={-90}
                     moving={phase === "play"}
+                    rushEquipped={phase === "play" ? hud.rushEquipped : null}
+                    rushSweetStack={phase === "play" ? hud.sweetStack : 0}
+                    rushOnionCloud={phase === "play" && hud.onionShieldCharges > 0}
+                    rushOmegaCharges={phase === "play" ? hud.omegaShieldCharges : 0}
+                    rushZincCount={phase === "play" ? hud.zincCount : 0}
+                    rushCitrusComet={phase === "play" && hud.citrusComet}
                     className="drop-shadow-[0_0_14px_rgba(168,85,247,0.45)]"
                   />
                 </div>
@@ -698,7 +914,9 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
       {phase === "play" ? (
         <p className="text-center text-[10px] text-muted-foreground">
-          {embed ? "Tap left/right on the game to strafe." : "Mobile: tap the left or right half of the game to strafe lanes."}
+          {embed
+            ? "Tap left/right to strafe. Dodge grey rivals; head collects buffs/junk only."
+            : "Mobile: tap left/right half to strafe. Dodge grey rivals; head collects buffs/junk only."}
         </p>
       ) : null}
     </div>
