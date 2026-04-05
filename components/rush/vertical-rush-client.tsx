@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/mock-mode";
@@ -243,7 +243,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   }, [phase, startRun]);
 
   /* eslint-disable react-hooks/exhaustive-deps -- RAF loop: applyGood/applyBad only use game ref + module constants */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (phase !== "play") return;
 
     let cancelled = false;
@@ -404,7 +404,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         bootRaf = requestAnimationFrame(boot);
         return;
       }
-      const c2d = canvas.getContext("2d", { alpha: false });
+      const c2d = canvas.getContext("2d");
       if (!c2d) return;
       ctx = c2d;
       const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
@@ -543,21 +543,27 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       ) : null}
 
       {(phase === "play" || phase === "dead") && (
-        <div className="relative mx-auto rounded-xl border border-purple-500/30 bg-black/80 p-2 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
-          <canvas
-            ref={canvasRef}
-            width={W}
-            height={H}
-            className="mx-auto block h-auto w-full max-w-[min(100%,360px)] touch-manipulation rounded-lg"
-            style={{ imageRendering: "pixelated" }}
-            onPointerDown={(e) => {
-              if (phase !== "play") return;
-              const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const g = game.current;
-              g.laneF = Math.max(0, Math.min(LANES - 1, (x / rect.width) * LANES - 0.5));
-            }}
-          />
+        <div className="relative mx-auto w-full max-w-[min(100%,360px)] rounded-xl border border-purple-500/30 bg-black/80 p-2 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
+          {/* Aspect box: without this, flex/WebKit often gives canvas 0 CSS height → “black hole” with only HUD visible. */}
+          <div
+            className="relative mx-auto w-full overflow-hidden rounded-lg"
+            style={{ aspectRatio: `${W} / ${H}` }}
+          >
+            <canvas
+              ref={canvasRef}
+              width={W}
+              height={H}
+              className="absolute inset-0 block h-full w-full touch-manipulation"
+              style={{ imageRendering: "pixelated" }}
+              onPointerDown={(e) => {
+                if (phase !== "play") return;
+                const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const g = game.current;
+                g.laneF = Math.max(0, Math.min(LANES - 1, (x / rect.width) * LANES - 0.5));
+              }}
+            />
+          </div>
           {phase === "play" ? (
             <div className="mt-2 grid grid-cols-3 gap-1 text-center font-mono text-[10px] text-muted-foreground">
               <span>{hud.m} m</span>

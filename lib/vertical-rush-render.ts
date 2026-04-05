@@ -36,9 +36,10 @@ export function drawVerticalRushBackground(
   scroll: number,
   nowMs: number
 ) {
-  const top = "#0f0630";
-  const mid = "#12082a";
-  const bot = "#050510";
+  /* Slightly lifted from pure black so WebKit/flex layouts never read as “broken / empty”. */
+  const top = "#1a0d3d";
+  const mid = "#1a1030";
+  const bot = "#0c0818";
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, top);
   g.addColorStop(0.45, mid);
