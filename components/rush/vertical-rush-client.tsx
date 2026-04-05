@@ -56,7 +56,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   const router = useRouter();
   const embed = variant === "embed";
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [phase, setPhase] = useState<"loading" | "ready" | "play" | "dead">("loading");
+  const [phase, setPhase] = useState<"loading" | "countdown" | "ready" | "play" | "dead">("loading");
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [hud, setHud] = useState({
     m: 0,
     hp: 100,
@@ -100,8 +101,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     } catch {
       /* ignore */
     }
-    setPhase("ready");
-  }, [router]);
+    setPhase(embed ? "countdown" : "ready");
+  }, [router, embed]);
 
   useEffect(() => {
     if (!embed || !onExit) return;
@@ -224,21 +225,33 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     setSavedCloud(null);
   }, []);
 
+  useEffect(() => {
+    if (phase !== "countdown") return;
+    let c = 3;
+    setCountdown(3);
+    const id = window.setInterval(() => {
+      c -= 1;
+      if (c <= 0) {
+        window.clearInterval(id);
+        setCountdown(null);
+        startRun();
+      } else {
+        setCountdown(c);
+      }
+    }, 700);
+    return () => window.clearInterval(id);
+  }, [phase, startRun]);
+
   /* eslint-disable react-hooks/exhaustive-deps -- RAF loop: applyGood/applyBad only use game ref + module constants */
   useEffect(() => {
     if (phase !== "play") return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx) return;
-    const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    let raf = 0;
+    let cancelled = false;
+    let bootRaf = 0;
+    let gameRaf = 0;
+    let listenersOn = false;
     const keys: Record<string, boolean> = {};
+    let ctx: CanvasRenderingContext2D | null = null;
 
     const down = (e: KeyboardEvent) => {
       keys[e.code] = true;
@@ -247,8 +260,6 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     const up = (e: KeyboardEvent) => {
       keys[e.code] = false;
     };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
 
     const fire = () => {
       const g = game.current;
@@ -260,6 +271,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     let last = performance.now();
 
     const loop = (now: number) => {
+      if (cancelled || !ctx) return;
       const g = game.current;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -382,21 +394,51 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
       drawPlayerSwimmer(ctx, px, py, now);
 
-      raf = requestAnimationFrame(loop);
+      gameRaf = requestAnimationFrame(loop);
     };
 
-    raf = requestAnimationFrame(loop);
+    const boot = () => {
+      if (cancelled) return;
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        bootRaf = requestAnimationFrame(boot);
+        return;
+      }
+      const c2d = canvas.getContext("2d", { alpha: false });
+      if (!c2d) return;
+      ctx = c2d;
+      const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      c2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!listenersOn) {
+        window.addEventListener("keydown", down);
+        window.addEventListener("keyup", up);
+        listenersOn = true;
+      }
+      last = performance.now();
+      gameRaf = requestAnimationFrame(loop);
+    };
+
+    bootRaf = requestAnimationFrame(boot);
+
     return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
+      cancelled = true;
+      cancelAnimationFrame(bootRaf);
+      cancelAnimationFrame(gameRaf);
+      if (listenersOn) {
+        window.removeEventListener("keydown", down);
+        window.removeEventListener("keyup", up);
+      }
     };
   }, [phase]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
     <div
-      className={`mx-auto flex max-w-lg flex-col gap-3 px-safe py-4 pb-safe pt-safe ${embed ? "min-h-0 flex-1 overflow-y-auto" : "min-h-dvh"}`}
+      className={`relative mx-auto flex w-full max-w-lg flex-col gap-2 px-safe py-3 pb-safe pt-safe ${
+        embed ? "min-h-[100dvh] flex-1" : "min-h-dvh"
+      }`}
     >
       <div className="flex items-center justify-between gap-2">
         {embed ? (
@@ -424,23 +466,38 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         )}
       </div>
 
-      <p className="text-center text-[11px] leading-snug text-muted-foreground">
-        {embed ? (
-          <>
-            Climb the lanes from the egg. <span className="text-foreground/80">Esc</span> or Close to return. Arrows strafe
-            · Space shoots after Citrus. Parody props — not medical advice.
-          </>
-        ) : (
-          <>
-            Nokia-style climb: you move up through lanes. Buffs (cyan ring), junk debuffs (pink dashed ring), and
-            red-framed walls hurt on contact. Arrows strafe · Space shoots after Citrus. Parody wellness props only — not
-            medical advice.
-          </>
-        )}
-      </p>
+      {!embed ? (
+        <p className="text-center text-[11px] leading-snug text-muted-foreground">
+          Nokia-style climb: you move up through lanes. Buffs (cyan ring), junk debuffs (pink dashed ring), and
+          red-framed walls hurt on contact. Arrows strafe · Space shoots after Citrus. Parody wellness props only — not
+          medical advice.
+        </p>
+      ) : null}
 
       {phase === "loading" ? (
         <p className="py-20 text-center text-muted-foreground">Loading…</p>
+      ) : null}
+
+      {phase === "countdown" && countdown != null ? (
+        <div
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm"
+          aria-live="polite"
+        >
+          {embed ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40"
+              onClick={() => onExit?.()}
+            >
+              Close
+            </Button>
+          ) : null}
+          <span className="font-display text-[min(22vw,7rem)] font-black tabular-nums text-foreground">{countdown}</span>
+          <p className="mt-4 text-xs text-muted-foreground">Arrows · Space (after Citrus) · Esc to exit</p>
+          <p className="mt-1 max-w-[240px] text-center text-[10px] text-muted-foreground/80">Parody props — not medical advice.</p>
+        </div>
       ) : null}
 
       {phase === "ready" ? (
@@ -540,7 +597,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
       {phase === "play" ? (
         <p className="text-center text-[10px] text-muted-foreground">
-          Mobile: tap the left or right half of the game to strafe lanes.
+          {embed ? "Tap left/right on the game to strafe." : "Mobile: tap the left or right half of the game to strafe lanes."}
         </p>
       ) : null}
     </div>
