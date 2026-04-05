@@ -19,9 +19,14 @@ export function LandingPage() {
               Beta
             </Badge>
           </div>
-          <Button variant="ghost" size="sm" className="shrink-0 text-xs sm:text-sm" asChild>
-            <Link href="/leaderboard">Leaderboard</Link>
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button variant="ghost" size="sm" className="text-xs sm:text-sm" asChild>
+              <Link href="/rush">Arcade</Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="text-xs sm:text-sm" asChild>
+              <Link href="/leaderboard">Leaderboard</Link>
+            </Button>
+          </div>
         </div>
       </header>
 

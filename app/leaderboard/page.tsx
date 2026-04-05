@@ -5,11 +5,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LeaderboardTable } from "@/components/leaderboard/leaderboard-table";
+import {
+  VerticalRushLeaderboardTable,
+  type VerticalRushRow,
+} from "@/components/leaderboard/vertical-rush-leaderboard-table";
 
 const MOCK_ROWS = [
   { id: "1", nickname: "PacketLossLarry", wins: 42, streak: 5, rating: 1240, podiums: 18 },
   { id: "2", nickname: "NeonNarwhal", wins: 38, streak: 2, rating: 1190, podiums: 15 },
   { id: "3", nickname: "TurboTofu", wins: 31, streak: 0, rating: 1122, podiums: 11 },
+];
+
+const MOCK_RUSH_ROWS: VerticalRushRow[] = [
+  { id: "1", nickname: "PacketLossLarry", bestM: 8420, runs: 24 },
+  { id: "2", nickname: "NeonNarwhal", bestM: 7910, runs: 18 },
+  { id: "3", nickname: "TurboTofu", bestM: 6540, runs: 31 },
 ];
 
 export default async function LeaderboardPage() {
@@ -21,6 +31,8 @@ export default async function LeaderboardPage() {
     rating: number;
     podiums: number;
   }[] = MOCK_ROWS;
+
+  let rushRows: VerticalRushRow[] = MOCK_RUSH_ROWS;
 
   if (isSupabaseConfigured()) {
     try {
@@ -38,6 +50,23 @@ export default async function LeaderboardPage() {
           streak: r.streak,
           rating: r.rating,
           podiums: r.podiums,
+        }));
+      }
+
+      const { data: bestData, error: rushErr } = await supabase
+        .from("vertical_rush_best")
+        .select("profile_id,best_distance_m,runs_played")
+        .order("best_distance_m", { ascending: false })
+        .limit(80);
+      if (!rushErr && bestData?.length) {
+        const ids = [...new Set(bestData.map((r) => r.profile_id))];
+        const { data: profs } = await supabase.from("profiles").select("id,nickname").in("id", ids);
+        const nm = new Map((profs ?? []).map((p) => [p.id, p.nickname]));
+        rushRows = bestData.map((r) => ({
+          id: r.profile_id,
+          nickname: nm.get(r.profile_id) ?? "—",
+          bestM: r.best_distance_m,
+          runs: r.runs_played,
         }));
       }
     } catch {
@@ -59,8 +88,9 @@ export default async function LeaderboardPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="global">
-            <TabsList>
+            <TabsList className="h-auto flex-wrap gap-1">
               <TabsTrigger value="global">Global</TabsTrigger>
+              <TabsTrigger value="vertical">Vertical rush</TabsTrigger>
               <TabsTrigger value="weekly">Weekly (MVP)</TabsTrigger>
             </TabsList>
             <TabsContent value="global">
@@ -68,6 +98,22 @@ export default async function LeaderboardPage() {
               {!isSupabaseConfigured() ? (
                 <p className="mt-3 text-xs text-amber-200/90">
                   Demo data shown — add Supabase keys in .env for a live table.
+                </p>
+              ) : null}
+            </TabsContent>
+            <TabsContent value="vertical">
+              <p className="mb-3 text-xs text-muted-foreground">
+                Best distance (meters) in{" "}
+                <Link href="/rush" className="text-purple-300 underline underline-offset-2 hover:text-purple-200">
+                  Arcade / Vertical rush
+                </Link>
+                . Apply migration <code className="rounded bg-white/10 px-1">vertical_rush_best</code> if the table is
+                missing.
+              </p>
+              <VerticalRushLeaderboardTable rows={rushRows} />
+              {!isSupabaseConfigured() ? (
+                <p className="mt-3 text-xs text-amber-200/90">
+                  Demo data shown — add Supabase keys and run migrations for live scores.
                 </p>
               ) : null}
             </TabsContent>

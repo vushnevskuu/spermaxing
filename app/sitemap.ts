@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const paths = ["", "/enter", "/leaderboard", "/login", "/onboarding"];
+const paths = ["", "/enter", "/leaderboard", "/rush", "/login", "/onboarding"];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "https://example.com";

@@ -215,6 +215,22 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["user_settings"]["Insert"]>;
         Relationships: [];
       };
+      vertical_rush_best: {
+        Row: {
+          profile_id: string;
+          best_distance_m: number;
+          runs_played: number;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          best_distance_m?: number;
+          runs_played?: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["vertical_rush_best"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
