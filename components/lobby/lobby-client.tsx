@@ -26,13 +26,15 @@ import {
   PRESENCE_UPSERT_INTERVAL_MS,
 } from "@/lib/constants";
 import { isInEggZone } from "@/lib/egg-zone";
-import { loadLocalProfile, type StoredProfile } from "@/lib/local-profile";
+import { loadLocalProfile, storedToCard, type StoredProfile } from "@/lib/local-profile";
+import { computeLoadoutStats } from "@/lib/avatar-stats";
 import { useLobbyStore } from "@/store/lobby-store";
 import { useLobbyRhythmStore } from "@/store/lobby-rhythm-store";
 import { LobbyAudioBridge } from "@/components/lobby/lobby-audio-bridge";
 import { LobbyEggZone } from "@/components/lobby/lobby-egg-zone";
 import { RhythmPulseWrap } from "@/components/lobby/rhythm-pulse-wrap";
 import { SwimmerAvatar } from "@/components/avatar/swimmer-avatar";
+import { PlayerCard } from "@/components/profile/player-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,7 +46,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ALL_TAIL_TYPES, type AvatarLoadout, type ColorTheme, type TailType, type AuraType } from "@/types";
+import {
+  ALL_TAIL_TYPES,
+  type AvatarLoadout,
+  type AuraType,
+  type ColorTheme,
+  type ProfileCardData,
+  type TailType,
+} from "@/types";
 import { cosmeticsForSeed, parseFaceExtraId, parseHeadgearId, parseNeckWearId } from "@/lib/loadout-cosmetics";
 import { CHAT_RATE_MS, MAX_CHAT_LEN } from "@/lib/constants";
 import { sanitizePublicText } from "@/lib/sanitize";
@@ -392,6 +401,72 @@ function fallbackLoadoutForProfile(profileId: string): AvatarLoadout {
   return defaultLoadout(profileIdSeed(profileId));
 }
 
+function swimmerToProfilePeekCard(s: Swimmer): ProfileCardData {
+  const st = computeLoadoutStats(s.loadout);
+  const seed = profileIdSeed(s.profileId);
+  return {
+    nickname: s.nickname,
+    avatarName: s.loadout.avatarName,
+    title: "Lobby swimmer",
+    tagline: s.inQueue ? "In the egg queue zone" : "Cruising the lobby",
+    colorTheme: s.loadout.colorTheme,
+    tailType: s.loadout.tailType,
+    auraEffect: s.loadout.auraEffect,
+    headgear: s.loadout.headgear,
+    faceExtra: s.loadout.faceExtra,
+    neckWear: s.loadout.neckWear,
+    division: "Lobby",
+    ovr: st.ovr,
+    wins: Math.abs(seed) % 50,
+    streak: Math.abs(seed >> 8) % 8,
+    badges: ["Lobby"],
+  };
+}
+
+async function fetchProfileCardDataForLobby(profileId: string): Promise<ProfileCardData | null> {
+  const supabase = createClient();
+  const { data: pr, error } = await supabase
+    .from("profiles")
+    .select("nickname,title,tagline,division,ovr,wins,streak,badges")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (error || !pr) return null;
+  const { data: av } = await supabase
+    .from("avatars")
+    .select("avatar_name,color_theme,tail_type,aura_effect,headgear,face_extra,neck_wear")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  const loadout: AvatarLoadout = {
+    avatarName: av?.avatar_name ?? "Swimmer",
+    colorTheme: (av?.color_theme as ColorTheme) ?? "electric",
+    tailType: parseTailType(av?.tail_type) ?? tailTypeFromProfileId(profileId),
+    auraEffect: (av?.aura_effect as AuraType) ?? "pulse",
+    headgear: parseHeadgearId(av?.headgear),
+    faceExtra: parseFaceExtraId(av?.face_extra),
+    neckWear: parseNeckWearId(av?.neck_wear),
+  };
+  const computed = computeLoadoutStats(loadout);
+  const ovr = pr.ovr != null && pr.ovr > 0 ? pr.ovr : computed.ovr;
+  const badges = Array.isArray(pr.badges) ? pr.badges : [];
+  return {
+    nickname: pr.nickname,
+    avatarName: loadout.avatarName,
+    title: pr.title?.trim() || "Rookie",
+    tagline: pr.tagline?.trim() ?? "",
+    colorTheme: loadout.colorTheme,
+    tailType: loadout.tailType,
+    auraEffect: loadout.auraEffect,
+    headgear: loadout.headgear,
+    faceExtra: loadout.faceExtra,
+    neckWear: loadout.neckWear,
+    division: pr.division?.trim() || "Rookie Neon",
+    ovr,
+    wins: pr.wins ?? 0,
+    streak: pr.streak ?? 0,
+    badges,
+  };
+}
+
 function useMockLobby(): boolean {
   if (typeof window === "undefined") return true;
   if (!isSupabaseConfigured()) return true;
@@ -426,6 +501,8 @@ export function LobbyClient() {
   const [reportTarget, setReportTarget] = useState<{ id: string; nick: string } | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [peekCard, setPeekCard] = useState<ProfileCardData | null>(null);
+  const [peekStatus, setPeekStatus] = useState<"idle" | "loading" | "error" | "ready">("idle");
   const [countdown, setCountdown] = useState<number | null>(null);
   const matchLock = useRef(false);
   const matchIv = useRef<number | null>(null);
@@ -1151,6 +1228,46 @@ export function LobbyClient() {
     [swimmers, me, mock, selectedProfileId]
   );
 
+  useEffect(() => {
+    if (!selectedProfileId || !me) {
+      setPeekCard(null);
+      setPeekStatus("idle");
+      return;
+    }
+    if (mock) {
+      const s = swimmers.find((x) => x.profileId === selectedProfileId);
+      if (!s) {
+        setPeekCard(null);
+        setPeekStatus("error");
+        return;
+      }
+      setPeekCard(swimmerToProfilePeekCard(s));
+      setPeekStatus("ready");
+      return;
+    }
+    if (selectedProfileId === me.id) {
+      setPeekCard(storedToCard(me));
+      setPeekStatus("ready");
+      return;
+    }
+    let cancelled = false;
+    setPeekStatus("loading");
+    setPeekCard(null);
+    void (async () => {
+      const data = await fetchProfileCardDataForLobby(selectedProfileId);
+      if (cancelled) return;
+      if (!data) {
+        setPeekStatus("error");
+        return;
+      }
+      setPeekCard(data);
+      setPeekStatus("ready");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProfileId, me, mock, swimmers]);
+
   async function submitReport() {
     if (!reportTarget) return;
     await fetch("/api/report", {
@@ -1586,21 +1703,37 @@ export function LobbyClient() {
       </div>
 
       <Dialog open={Boolean(selected)} onOpenChange={() => setSelectedProfileId(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[min(90dvh,640px)] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{selected?.nickname}</DialogTitle>
+            <DialogTitle className="sr-only">
+              {peekCard?.nickname ?? selected?.nickname ?? "Player profile"}
+            </DialogTitle>
           </DialogHeader>
-          {selected ? (
-            <div className="space-y-3">
-              <SwimmerAvatar
-                colorTheme={selected.loadout.colorTheme}
-                tailType={selected.loadout.tailType}
-                auraEffect={selected.loadout.auraEffect}
-                headgear={selected.loadout.headgear}
-                faceExtra={selected.loadout.faceExtra}
-                neckWear={selected.loadout.neckWear}
-                size="lg"
-              />
+          {peekStatus === "loading" ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Loading profile…</p>
+          ) : null}
+          {peekStatus === "ready" && peekCard ? (
+            <PlayerCard data={peekCard} exportId={`lobby-peek-${selectedProfileId ?? "x"}`} />
+          ) : null}
+          {peekStatus === "error" && selected ? (
+            <div className="space-y-2 rounded-lg border border-border bg-card/50 p-3">
+              <p className="text-xs text-muted-foreground">Couldn&apos;t load full profile from server.</p>
+              <div className="flex justify-center">
+                <SwimmerAvatar
+                  colorTheme={selected.loadout.colorTheme}
+                  tailType={selected.loadout.tailType}
+                  auraEffect={selected.loadout.auraEffect}
+                  headgear={selected.loadout.headgear}
+                  faceExtra={selected.loadout.faceExtra}
+                  neckWear={selected.loadout.neckWear}
+                  size="lg"
+                />
+              </div>
+              <p className="text-center text-sm font-semibold">{selected.nickname}</p>
+            </div>
+          ) : null}
+          {selected && peekStatus !== "loading" ? (
+            <div className="flex flex-col gap-2 border-t border-border pt-3">
               {selected.profileId !== me.id ? (
                 <Button
                   variant="secondary"
@@ -1617,6 +1750,7 @@ export function LobbyClient() {
               <Button
                 variant="destructive"
                 size="sm"
+                className="w-full"
                 onClick={() => {
                   setReportTarget({ id: selected.profileId, nick: selected.nickname });
                   setReportOpen(true);
