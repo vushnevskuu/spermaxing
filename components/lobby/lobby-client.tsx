@@ -94,6 +94,63 @@ type ChatRow = {
   recipientNickname: string | null;
 };
 
+function ChatNickContextMenu(props: {
+  profileId: string;
+  nickname: string;
+  showReport: boolean;
+  onClose: () => void;
+  onWhisper: (id: string, nick: string) => void;
+  onOpenProfile: (id: string) => void;
+  onReport: (id: string, nick: string) => void;
+}) {
+  const { profileId, nickname, showReport, onClose, onWhisper, onOpenProfile, onReport } = props;
+  const itemClass =
+    "flex min-h-11 w-full items-center px-2.5 py-2 text-left text-[11px] font-medium text-foreground hover:bg-muted/80 md:min-h-9 md:py-1.5";
+  return (
+    <div
+      role="menu"
+      className="absolute bottom-full left-0 z-[80] mb-1 flex min-w-[160px] flex-col overflow-hidden rounded-md border border-border bg-card py-0.5 shadow-xl"
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        className={itemClass}
+        onClick={() => {
+          onWhisper(profileId, nickname);
+          onClose();
+        }}
+      >
+        Whisper
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className={itemClass}
+        onClick={() => {
+          onOpenProfile(profileId);
+          onClose();
+        }}
+      >
+        Profile
+      </button>
+      {showReport ? (
+        <button
+          type="button"
+          role="menuitem"
+          className={cn(itemClass, "text-destructive hover:bg-destructive/10")}
+          onClick={() => {
+            onReport(profileId, nickname);
+            onClose();
+          }}
+        >
+          Report
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** Порог смещения за тик: ниже — чаще считаем «движется», хвост в активной анимации. */
 const MOVE_EPS = 0.000028;
 
@@ -506,6 +563,8 @@ export function LobbyClient() {
   const [reportTarget, setReportTarget] = useState<{ id: string; nick: string } | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  /** Открытое контекстное меню по нику в чате (id сообщения). */
+  const [chatNickMenuMsgId, setChatNickMenuMsgId] = useState<string | null>(null);
   const [peekCard, setPeekCard] = useState<ProfileCardData | null>(null);
   const [peekStatus, setPeekStatus] = useState<"idle" | "loading" | "error" | "ready">("idle");
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -1074,6 +1133,27 @@ export function LobbyClient() {
   }, [me, inEggZone, eggArcadeOpen, countdown, selectedProfileId, reportOpen]);
 
   useEffect(() => {
+    if (!chatNickMenuMsgId) return;
+    const close = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("[data-chat-nick-root]")) return;
+      setChatNickMenuMsgId(null);
+    };
+    document.addEventListener("mousedown", close, true);
+    return () => document.removeEventListener("mousedown", close, true);
+  }, [chatNickMenuMsgId]);
+
+  useEffect(() => {
+    if (!chatNickMenuMsgId) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setChatNickMenuMsgId(null);
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [chatNickMenuMsgId]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       keys.current[e.code] = e.type === "keydown";
     };
@@ -1508,8 +1588,8 @@ export function LobbyClient() {
                     </div>
                   </div>
                   <p className="relative z-[1] border-b border-border px-2 py-1 text-[9px] leading-snug text-muted-foreground">
-                    <span className="font-mono text-foreground">/w</span> then pick a name ·{" "}
-                    <span className="font-mono text-foreground">/w Name message</span> ·{" "}
+                    <span className="font-mono text-foreground">/w</span> then pick a name · click a name for whisper /
+                    profile / report · <span className="font-mono text-foreground">/w Name message</span> ·{" "}
                     <span className="font-mono text-foreground">Esc</span> wardrobe · whisper to you = short ping · WASD
                     when chat unfocused · in the egg: <span className="font-mono text-foreground">Q</span> solo climb
                   </p>
@@ -1556,6 +1636,8 @@ export function LobbyClient() {
                             </div>
                           );
                         }
+                        const authorMenuKey = m.id;
+                        const recipientMenuKey = `${m.id}:to`;
                         return (
                           <div
                             key={m.id}
@@ -1577,10 +1659,80 @@ export function LobbyClient() {
                                 isWhisper && "text-purple-200/90"
                               )}
                             >
-                              {m.nickname}
+                              {!isMine ? (
+                                <span data-chat-nick-root className="relative inline-block max-w-[min(140px,40vw)] align-baseline">
+                                  <button
+                                    type="button"
+                                    className="max-w-full truncate rounded px-0.5 text-left font-semibold uppercase tracking-wide text-muted-foreground hover:bg-white/10 hover:text-foreground focus-visible:outline focus-visible:ring-2 focus-visible:ring-purple-500/50"
+                                    aria-expanded={chatNickMenuMsgId === authorMenuKey}
+                                    aria-haspopup="menu"
+                                    aria-label={`Actions for ${m.nickname}`}
+                                    onClick={() =>
+                                      setChatNickMenuMsgId((x) => (x === authorMenuKey ? null : authorMenuKey))
+                                    }
+                                  >
+                                    {m.nickname}
+                                  </button>
+                                  {chatNickMenuMsgId === authorMenuKey ? (
+                                    <ChatNickContextMenu
+                                      profileId={m.profileId}
+                                      nickname={m.nickname}
+                                      showReport={m.profileId !== me.id}
+                                      onClose={() => setChatNickMenuMsgId(null)}
+                                      onWhisper={(id, nick) => setWhisperTo({ id, nick })}
+                                      onOpenProfile={(id) => setSelectedProfileId(id)}
+                                      onReport={(id, nick) => {
+                                        setReportTarget({ id, nick });
+                                        setReportOpen(true);
+                                      }}
+                                    />
+                                  ) : null}
+                                </span>
+                              ) : (
+                                <span className="font-semibold uppercase tracking-wide">{m.nickname}</span>
+                              )}
                               {m.recipientProfileId ? (
                                 <span className="ml-1 font-normal normal-case text-purple-300/80">
-                                  {incoming ? "(whisper)" : "(to " + (m.recipientNickname ?? "?") + ")"}
+                                  {incoming ? (
+                                    "(whisper)"
+                                  ) : m.recipientNickname && m.recipientProfileId ? (
+                                    <>
+                                      {"(to "}
+                                      <span data-chat-nick-root className="relative inline-block max-w-[min(120px,36vw)] align-baseline">
+                                        <button
+                                          type="button"
+                                          className="max-w-full truncate rounded px-0.5 text-purple-200/95 hover:bg-purple-500/15 hover:underline focus-visible:outline focus-visible:ring-2 focus-visible:ring-purple-500/50"
+                                          aria-expanded={chatNickMenuMsgId === recipientMenuKey}
+                                          aria-haspopup="menu"
+                                          aria-label={`Actions for ${m.recipientNickname}`}
+                                          onClick={() =>
+                                            setChatNickMenuMsgId((x) =>
+                                              x === recipientMenuKey ? null : recipientMenuKey
+                                            )
+                                          }
+                                        >
+                                          {m.recipientNickname}
+                                        </button>
+                                        {chatNickMenuMsgId === recipientMenuKey ? (
+                                          <ChatNickContextMenu
+                                            profileId={m.recipientProfileId}
+                                            nickname={m.recipientNickname}
+                                            showReport={m.recipientProfileId !== me.id}
+                                            onClose={() => setChatNickMenuMsgId(null)}
+                                            onWhisper={(id, nick) => setWhisperTo({ id, nick })}
+                                            onOpenProfile={(id) => setSelectedProfileId(id)}
+                                            onReport={(id, nick) => {
+                                              setReportTarget({ id, nick });
+                                              setReportOpen(true);
+                                            }}
+                                          />
+                                        ) : null}
+                                      </span>
+                                      {")"}
+                                    </>
+                                  ) : (
+                                    "(to ?)"
+                                  )}
                                 </span>
                               ) : null}
                             </div>
@@ -1663,6 +1815,10 @@ export function LobbyClient() {
                           if (e.key === "Escape") {
                             e.preventDefault();
                             e.stopPropagation();
+                            if (chatNickMenuMsgId) {
+                              setChatNickMenuMsgId(null);
+                              return;
+                            }
                             if (open) {
                               setChatInput("");
                               return;

@@ -165,75 +165,96 @@ export function drawCitrusCometTrail(ctx: CanvasRenderingContext2D, px: number, 
   ctx.fill();
 }
 
+/** Синхронно с `SwimmerAvatar` / `VIEWBOX` + голова (эллипс). Масштаб как у `size="lg"` (88×62 при viewBox 64×44). */
+const RIVAL_VB = { w: 64, h: 44, headCx: 40, headCy: 22, headRx: 17, headRy: 14, attachX: 24, attachY: 22 };
+const RIVAL_SCALE = 88 / RIVAL_VB.w;
+
+/** Жгутик «ribbon»: те же порядок величин, что у `waveParams("ribbon")` + lg в `FlagellumTail`. */
+function rivalRibbonTailPoints(
+  ax: number,
+  ay: number,
+  nowMs: number
+): [number, number][] {
+  const segments = 7;
+  const step = Math.round(9 * 0.94 * 1.12);
+  const ampRad = (22 * (Math.PI / 180)) * 1.03;
+  const t = nowMs * 0.0041;
+  const pts: [number, number][] = [[ax, ay]];
+  let x = ax;
+  let y = ay;
+  let ang = Math.PI;
+  for (let i = 0; i < segments; i++) {
+    const w =
+      Math.sin(t * 1.08 + i * 0.62) * ampRad * (0.72 + (i / Math.max(1, segments - 1)) * 0.35);
+    ang += w;
+    x += Math.cos(ang) * step;
+    y += Math.sin(ang) * step;
+    pts.push([x, y]);
+  }
+  return pts;
+}
+
 /**
- * Вражеский сперматозоид: тот же read, что у яйца — градиент, ореол, кольцо-угроза;
- * голова без глаз (только блик), жгутик широкий и волнообразный (cartoon, non-explicit).
+ * Встречный сперматозоид: тот же силуэт, что у аватара (голова + сегментный жгутик), без косметики;
+ * слегка розово-малиновый. Нос вниз по экрану (навстречу игроку).
  */
 export function drawRivalSwimmer(ctx: CanvasRenderingContext2D, cx: number, cy: number, nowMs: number) {
   const t = nowMs * 0.0035;
-  const wob = Math.sin(t * 1.05) * 1.35;
-  const wave = Math.sin(t * 1.45) * 6;
+  const wob = Math.sin(t * 1.05) * 1.2;
+  const {
+    headCx,
+    headCy,
+    headRx,
+    headRy,
+    attachX,
+    attachY,
+  } = RIVAL_VB;
+  const S = RIVAL_SCALE;
+
   ctx.save();
   ctx.translate(cx, cy + wob);
+  ctx.rotate(TAU / 4);
+  ctx.scale(S, S);
+  ctx.translate(-headCx, -headCy);
 
-  const halo = ctx.createRadialGradient(0, 6, 0, 0, 6, 38);
-  halo.addColorStop(0, "rgba(244,63,94,0.32)");
-  halo.addColorStop(0.4, "rgba(190,24,93,0.14)");
-  halo.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(0, 6, 38, 0, TAU);
-  ctx.fill();
-
-  ctx.strokeStyle = "rgba(251,113,133,0.55)";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([5, 6]);
-  ctx.beginPath();
-  ctx.arc(1, 7, 31, 0, TAU);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.fillStyle = "#fb7185";
-  ctx.strokeStyle = "#9f1239";
-  ctx.lineWidth = 2.4;
-  ctx.lineJoin = "round";
+  const ax = attachX - headCx;
+  const ay = attachY - headCy;
+  const tailPts = rivalRibbonTailPoints(ax, ay, nowMs);
+  const baseW = 2.5 + 0.8;
   ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(10, 9);
-  ctx.bezierCurveTo(2, 12, -8, 6, -16, -4 + wave * 0.25);
-  ctx.bezierCurveTo(-24, -14 + wave, -34, -22 + wave * 0.6, -40, -12 + wave * 0.35);
-  ctx.bezierCurveTo(-36, 2, -22, 12, -6, 14);
-  ctx.bezierCurveTo(4, 15, 10, 12, 10, 9);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  ctx.lineJoin = "round";
+  for (let i = 0; i < tailPts.length - 1; i++) {
+    const taper = 1 - i * 0.06;
+    ctx.strokeStyle = "#fecdd3";
+    ctx.lineWidth = Math.max(1.25, baseW * taper);
+    ctx.beginPath();
+    ctx.moveTo(tailPts[i][0], tailPts[i][1]);
+    ctx.lineTo(tailPts[i + 1][0], tailPts[i + 1][1]);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(190, 24, 93, 0.35)";
+    ctx.lineWidth = Math.max(0.9, (baseW * taper) * 0.55);
+    ctx.beginPath();
+    ctx.moveTo(tailPts[i][0], tailPts[i][1]);
+    ctx.lineTo(tailPts[i + 1][0], tailPts[i + 1][1]);
+    ctx.stroke();
+  }
 
-  ctx.strokeStyle = "rgba(255,255,255,0.42)";
-  ctx.lineWidth = 1.6;
-  ctx.beginPath();
-  ctx.moveTo(6, 10);
-  ctx.bezierCurveTo(-4, 10, -14, 2, -22, -8 + wave * 0.3);
-  ctx.bezierCurveTo(-28, -14 + wave * 0.5, -34, -16 + wave * 0.4, -38, -10);
-  ctx.stroke();
-
-  const hx = 3;
-  const hy = 11;
-  const headGrad = ctx.createRadialGradient(hx - 5, hy - 6, 1, hx, hy, 17);
+  const headGrad = ctx.createRadialGradient(-5, -6, 1, 0, 0, 18);
   headGrad.addColorStop(0, "#fff1f2");
-  headGrad.addColorStop(0.25, "#fda4af");
-  headGrad.addColorStop(0.65, "#f43f5e");
-  headGrad.addColorStop(1, "#be123c");
+  headGrad.addColorStop(0.22, "#fda4af");
+  headGrad.addColorStop(0.55, "#fb7185");
+  headGrad.addColorStop(1, "#e11d48");
   ctx.fillStyle = headGrad;
   ctx.beginPath();
-  ctx.ellipse(hx, hy, 16, 13, Math.sin(t * 0.85) * 0.1, 0, TAU);
+  ctx.ellipse(0, 0, headRx, headRy, Math.sin(t * 0.85) * 0.08, 0, TAU);
   ctx.fill();
-  ctx.strokeStyle = "#881337";
+  ctx.strokeStyle = "#9f1239";
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.beginPath();
-  ctx.ellipse(hx - 6, hy - 5, 4.5, 2.8, -0.55, 0, TAU);
+  ctx.ellipse(-6, -3, 4.5, 2.8, -0.55, 0, TAU);
   ctx.fill();
 
   ctx.restore();
