@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { motion, useAnimation, useReducedMotion } from "framer-motion";
+import { useLobbyRhythmStore } from "@/store/lobby-rhythm-store";
 
 const DIM_RGB = "82, 82, 82";
 
@@ -64,12 +65,9 @@ function EggAccentBurst({
   );
 }
 
-export function LobbyEggZone(props: {
-  online: number;
-  accentGeneration: number;
-  visualPulse: boolean;
-}) {
-  const { online, accentGeneration, visualPulse } = props;
+export function LobbyEggZone(props: { online: number; visualPulse: boolean }) {
+  const { online, visualPulse } = props;
+  const accentGeneration = useLobbyRhythmStore((s) => s.accentGeneration);
   const shell = useAnimation();
   const digit = useAnimation();
   const reduce = useReducedMotion();

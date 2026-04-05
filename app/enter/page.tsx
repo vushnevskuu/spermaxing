@@ -79,7 +79,7 @@ export default function EnterPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center py-10 pt-safe pb-safe px-safe">
       <Card className="border-2 border-amber-500/30 bg-card/95 shadow-[0_0_40px_rgba(255,200,100,0.12)]">
         <CardHeader>
           <CardTitle className="font-black">Pick a nickname</CardTitle>

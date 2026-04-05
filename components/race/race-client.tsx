@@ -390,7 +390,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
             "repeating-linear-gradient(180deg, transparent, transparent 14px, rgba(255,255,255,0.03) 15px)",
         }}
       />
-      <div className="relative z-10 mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
+      <div className="relative z-10 mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[max(1rem,env(safe-area-inset-top,0px))]">
         <div className="flex items-center justify-between">
           <Badge variant="outline" className="font-display tracking-wide">
             Room: {demo ? "demo" : roomId.slice(0, 8)}
@@ -554,7 +554,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
 
               <button
                 type="button"
-                className="absolute bottom-4 left-1/2 z-20 h-16 w-16 -translate-x-1/2 rounded-full border border-border bg-muted font-display text-xs font-semibold text-foreground md:hidden"
+                className="absolute bottom-[max(1rem,env(safe-area-inset-bottom,0px))] left-1/2 z-20 h-16 w-16 min-h-[56px] min-w-[56px] -translate-x-1/2 touch-manipulation rounded-full border border-border bg-muted font-display text-xs font-semibold text-foreground md:hidden"
                 onPointerDown={onTapBoost}
               >
                 GO

@@ -46,7 +46,7 @@ export default async function LeaderboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
+    <div className="mx-auto max-w-4xl py-10 pt-safe pb-safe px-safe">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-black text-white">Leaderboard</h1>
         <Button variant="secondary" asChild>

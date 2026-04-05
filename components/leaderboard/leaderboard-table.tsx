@@ -22,7 +22,7 @@ export function LeaderboardTable(props: {
 
   return (
     <div className="space-y-3">
-      <Input placeholder="Search nickname…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <Input className="min-h-11 text-base md:min-h-10 md:text-sm" placeholder="Search nickname…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="overflow-x-auto rounded-sm border-2 border-border">
         <table className="w-full text-left text-sm">
           <thead className="bg-white/5 text-xs uppercase text-muted-foreground">

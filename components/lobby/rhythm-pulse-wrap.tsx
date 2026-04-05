@@ -2,15 +2,16 @@
 
 import { useEffect } from "react";
 import { motion, useAnimation, useReducedMotion } from "framer-motion";
+import { useLobbyRhythmStore } from "@/store/lobby-rhythm-store";
 
-/** Общая пульсация под акцент (масштаб от центра). */
+/** Общая пульсация под акцент (масштаб от центра). Счётчик акцента читается из стора — без лишних ререндеров родителя. */
 export function RhythmPulseWrap(props: {
-  accentGeneration: number;
   enabled: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
-  const { accentGeneration, enabled, children, className } = props;
+  const { enabled, children, className } = props;
+  const accentGeneration = useLobbyRhythmStore((s) => s.accentGeneration);
   const c = useAnimation();
   const reduce = useReducedMotion();
 

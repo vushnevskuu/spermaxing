@@ -1,6 +1,8 @@
 "use client";
 
+import * as React from "react";
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -8,6 +10,7 @@ import {
   useRef,
   useState,
   type MutableRefObject,
+  type RefObject,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -167,90 +170,186 @@ function buildDisplaySwimmers(
   return dedupeSwimmersByProfileId(merged);
 }
 
-type LobbyPlayfieldAvatarsProps = {
-  swimmers: Swimmer[];
-  me: StoredProfile;
-  mock: boolean;
-  posRef: MutableRefObject<{ x: number; y: number }>;
-  accentGeneration: number;
+const RemoteLobbyAvatarRow = memo(function RemoteLobbyAvatarRow({
+  s,
+  visualRhythm,
+  setSelectedProfileId,
+  swimmerPrevPosRef,
+  swimmerFacingRef,
+}: {
+  s: Swimmer;
   visualRhythm: boolean;
   setSelectedProfileId: (id: string | null) => void;
   swimmerPrevPosRef: MutableRefObject<Map<string, { x: number; y: number }>>;
   swimmerFacingRef: MutableRefObject<Map<string, number>>;
-  playfieldRafFlushRef: MutableRefObject<(() => void) | null>;
+}) {
+  const { facingDeg, moving } = lobbySwimmerMotion(
+    swimmerPrevPosRef,
+    swimmerFacingRef,
+    s.profileId,
+    s.x,
+    s.y
+  );
+  return (
+    <button
+      type="button"
+      className="absolute z-10 -translate-x-1/2 -translate-y-1/2 bg-transparent p-0 will-change-transform"
+      style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }}
+      onClick={() => setSelectedProfileId(s.profileId)}
+    >
+      <RhythmPulseWrap enabled={visualRhythm}>
+        <SwimmerAvatar
+          colorTheme={s.loadout.colorTheme}
+          tailType={s.loadout.tailType}
+          auraEffect={s.loadout.auraEffect}
+          headgear={s.loadout.headgear}
+          faceExtra={s.loadout.faceExtra}
+          neckWear={s.loadout.neckWear}
+          label={s.nickname}
+          facingDeg={facingDeg}
+          moving={moving}
+          referenceLobbyStyle
+        />
+      </RhythmPulseWrap>
+      {s.inQueue ? (
+        <Badge className="absolute -right-2 -top-2 text-[10px] shadow-none" variant="secondary">
+          Q
+        </Badge>
+      ) : null}
+    </button>
+  );
+});
+
+/** Локальный игрок: позиция обновляется в RAF через ref (без setState на весь список), анимация хвоста — только этот инстанс. */
+function LocalLobbyAvatar({
+  me,
+  posRef,
+  visualRhythm,
+  inQueue,
+  setSelectedProfileId,
+  swimmerPrevPosRef,
+  swimmerFacingRef,
+  animFlushRef,
+  buttonRef,
+}: {
+  me: StoredProfile;
+  posRef: MutableRefObject<{ x: number; y: number }>;
+  visualRhythm: boolean;
+  inQueue: boolean;
+  setSelectedProfileId: (id: string | null) => void;
+  swimmerPrevPosRef: MutableRefObject<Map<string, { x: number; y: number }>>;
+  swimmerFacingRef: MutableRefObject<Map<string, number>>;
+  animFlushRef: MutableRefObject<(() => void) | null>;
+  buttonRef: RefObject<HTMLButtonElement | null>;
+}) {
+  const [anim, setAnim] = useState({ facingDeg: -90, moving: false });
+
+  useLayoutEffect(() => {
+    const flush = () => {
+      const { facingDeg, moving } = lobbySwimmerMotion(
+        swimmerPrevPosRef,
+        swimmerFacingRef,
+        me.id,
+        posRef.current.x,
+        posRef.current.y
+      );
+      setAnim((prev) =>
+        prev.facingDeg === facingDeg && prev.moving === moving ? prev : { facingDeg, moving }
+      );
+    };
+    animFlushRef.current = flush;
+    return () => {
+      if (animFlushRef.current === flush) animFlushRef.current = null;
+    };
+  }, [me.id, animFlushRef, posRef, swimmerFacingRef, swimmerPrevPosRef]);
+
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      className="absolute z-10 -translate-x-1/2 -translate-y-1/2 bg-transparent p-0 will-change-transform"
+      style={{ left: `${posRef.current.x * 100}%`, top: `${posRef.current.y * 100}%` }}
+      onClick={() => setSelectedProfileId(me.id)}
+    >
+      <RhythmPulseWrap enabled={visualRhythm}>
+        <SwimmerAvatar
+          colorTheme={me.colorTheme}
+          tailType={me.tailType}
+          auraEffect={me.auraEffect}
+          headgear={me.headgear}
+          faceExtra={me.faceExtra}
+          neckWear={me.neckWear}
+          label={me.nickname}
+          facingDeg={anim.facingDeg}
+          moving={anim.moving}
+          referenceLobbyStyle
+        />
+      </RhythmPulseWrap>
+      {inQueue ? (
+        <Badge className="absolute -right-2 -top-2 text-[10px] shadow-none" variant="secondary">
+          Q
+        </Badge>
+      ) : null}
+    </button>
+  );
+}
+
+type LobbyPlayfieldAvatarsProps = {
+  swimmers: Swimmer[];
+  me: StoredProfile;
+  posRef: MutableRefObject<{ x: number; y: number }>;
+  visualRhythm: boolean;
+  inEggZone: boolean;
+  setSelectedProfileId: (id: string | null) => void;
+  swimmerPrevPosRef: MutableRefObject<Map<string, { x: number; y: number }>>;
+  swimmerFacingRef: MutableRefObject<Map<string, number>>;
+  localAvatarButtonRef: RefObject<HTMLButtonElement | null>;
+  localAvatarAnimFlushRef: MutableRefObject<(() => void) | null>;
 };
 
-/** Только этот слой перерисовывается каждый кадр движения — чат и остальной UI не участвуют в 60fps. */
+/** Удалённые плавунцы — только при смене `swimmers`; локальный — отдельно, без 60fps ререндера всего чата. */
 function LobbyPlayfieldAvatars(props: LobbyPlayfieldAvatarsProps) {
   const {
     swimmers,
     me,
-    mock,
     posRef,
-    accentGeneration,
     visualRhythm,
+    inEggZone,
     setSelectedProfileId,
     swimmerPrevPosRef,
     swimmerFacingRef,
-    playfieldRafFlushRef,
+    localAvatarButtonRef,
+    localAvatarAnimFlushRef,
   } = props;
-  const [rafTick, setRafTick] = useState(0);
 
-  useLayoutEffect(() => {
-    const flush = () => setRafTick((t) => t + 1);
-    playfieldRafFlushRef.current = flush;
-    return () => {
-      playfieldRafFlushRef.current = null;
-    };
-  }, [playfieldRafFlushRef]);
-
-  const displaySwimmers = useMemo(
-    () => buildDisplaySwimmers(swimmers, me, mock, posRef),
-    // rafTick подтягивает чтение posRef; сам ref стабилен
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- posRef стабилен
-    [swimmers, me, mock, rafTick]
-  );
+  const remoteSwimmers = useMemo(() => {
+    const deduped = dedupeSwimmersByProfileId(swimmers);
+    return deduped.filter((s) => s.profileId !== me.id);
+  }, [swimmers, me.id]);
 
   return (
     <>
-      {displaySwimmers.map((s) => {
-        const { facingDeg, moving } = lobbySwimmerMotion(
-          swimmerPrevPosRef,
-          swimmerFacingRef,
-          s.profileId,
-          s.x,
-          s.y
-        );
-        return (
-          <button
-            key={s.profileId}
-            type="button"
-            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 bg-transparent p-0 will-change-transform"
-            style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }}
-            onClick={() => setSelectedProfileId(s.profileId)}
-          >
-            <RhythmPulseWrap accentGeneration={accentGeneration} enabled={visualRhythm}>
-              <SwimmerAvatar
-                colorTheme={s.loadout.colorTheme}
-                tailType={s.loadout.tailType}
-                auraEffect={s.loadout.auraEffect}
-                headgear={s.loadout.headgear}
-                faceExtra={s.loadout.faceExtra}
-                neckWear={s.loadout.neckWear}
-                label={s.nickname}
-                facingDeg={facingDeg}
-                moving={moving}
-                referenceLobbyStyle
-              />
-            </RhythmPulseWrap>
-            {s.inQueue ? (
-              <Badge className="absolute -right-2 -top-2 text-[10px] shadow-none" variant="secondary">
-                Q
-              </Badge>
-            ) : null}
-          </button>
-        );
-      })}
+      {remoteSwimmers.map((s) => (
+        <RemoteLobbyAvatarRow
+          key={s.profileId}
+          s={s}
+          visualRhythm={visualRhythm}
+          setSelectedProfileId={setSelectedProfileId}
+          swimmerPrevPosRef={swimmerPrevPosRef}
+          swimmerFacingRef={swimmerFacingRef}
+        />
+      ))}
+      <LocalLobbyAvatar
+        me={me}
+        posRef={posRef}
+        visualRhythm={visualRhythm}
+        inQueue={inEggZone}
+        setSelectedProfileId={setSelectedProfileId}
+        swimmerPrevPosRef={swimmerPrevPosRef}
+        swimmerFacingRef={swimmerFacingRef}
+        animFlushRef={localAvatarAnimFlushRef}
+        buttonRef={localAvatarButtonRef}
+      />
     </>
   );
 }
@@ -334,15 +433,72 @@ export function LobbyClient() {
   const mockBotsStateRef = useRef<Swimmer[] | null>(null);
   const swimmersRef = useRef<Swimmer[]>(swimmers);
   swimmersRef.current = swimmers;
-  const playfieldRafFlushRef = useRef<(() => void) | null>(null);
+  const localAvatarButtonRef = useRef<HTMLButtonElement | null>(null);
+  const localAvatarAnimFlushRef = useRef<(() => void) | null>(null);
   const prevEggZoneRef = useRef<boolean | null>(null);
   const presenceUserIdRef = useRef<string | null>(null);
+  const playfieldSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const pointerSteerActiveRef = useRef(false);
 
-  const accentGeneration = useLobbyRhythmStore((s) => s.accentGeneration);
   const lobbyMusicOn = useLobbyRhythmStore((s) => s.lobbyMusicOn);
   const setLobbyMusicOn = useLobbyRhythmStore((s) => s.setLobbyMusicOn);
   const reduceMotion = useReducedMotion();
   const visualRhythm = Boolean(lobbyMusicOn && !reduceMotion);
+
+  const syncLocalAvatarDom = useCallback(() => {
+    const el = localAvatarButtonRef.current;
+    if (el) {
+      el.style.left = `${posRef.current.x * 100}%`;
+      el.style.top = `${posRef.current.y * 100}%`;
+    }
+    localAvatarAnimFlushRef.current?.();
+  }, []);
+
+  const applyPointerSteer = useCallback(
+    (clientX: number, clientY: number, el: HTMLDivElement) => {
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return;
+      posRef.current.x = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+      posRef.current.y = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
+      clampLobbyPosition(posRef.current);
+      syncLocalAvatarDom();
+    },
+    [syncLocalAvatarDom]
+  );
+
+  const onPlayfieldPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (chatFocusedRef.current) return;
+      const tar = e.target as HTMLElement | null;
+      if (!tar || !e.currentTarget.contains(tar)) return;
+      if (tar.closest("[data-lobby-chrome], button, a, input, textarea")) return;
+      pointerSteerActiveRef.current = true;
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      applyPointerSteer(e.clientX, e.clientY, e.currentTarget);
+    },
+    [applyPointerSteer]
+  );
+
+  const onPlayfieldPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!pointerSteerActiveRef.current) return;
+      applyPointerSteer(e.clientX, e.clientY, e.currentTarget);
+    },
+    [applyPointerSteer]
+  );
+
+  const onPlayfieldPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    pointerSteerActiveRef.current = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -856,12 +1012,12 @@ export function LobbyClient() {
           setInEggZone(z);
         }
       }
-      playfieldRafFlushRef.current?.();
+      syncLocalAvatarDom();
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [me, mock, setInEggZone]);
+  }, [me, mock, setInEggZone, syncLocalAvatarDom]);
 
   async function sendChat() {
     if (!me) return;
@@ -1006,17 +1162,26 @@ export function LobbyClient() {
 
   return (
     <div
-      className={cn("flex h-dvh flex-col overflow-hidden font-sans text-zinc-100")}
+      className={cn("flex h-dvh flex-col overflow-hidden pt-safe font-sans text-zinc-100")}
       style={{ backgroundColor: REF.bg }}
     >
-      <div className="relative z-10 flex min-h-0 flex-1 p-2 md:pb-0">
+      <div className="relative z-10 flex min-h-0 flex-1 p-2 px-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pb-0">
         <div
-          className="relative min-h-[200px] flex-1 touch-none overflow-hidden rounded-lg border border-border bg-background shadow-[inset_0_0_80px_rgba(0,0,0,0.5)]"
+          ref={playfieldSurfaceRef}
+          className="relative min-h-[200px] flex-1 touch-manipulation overflow-hidden rounded-lg border border-border bg-background shadow-[inset_0_0_80px_rgba(0,0,0,0.5)]"
           style={{ backgroundColor: REF.bg }}
+          onPointerDown={onPlayfieldPointerDown}
+          onPointerMove={onPlayfieldPointerMove}
+          onPointerUp={onPlayfieldPointerEnd}
+          onPointerCancel={onPlayfieldPointerEnd}
+          onPointerLeave={(e) => {
+            if (e.pointerType === "mouse") onPlayfieldPointerEnd(e);
+          }}
         >
           <LobbyAudioBridge />
           <div
-            className="absolute right-2 top-2 z-[25] flex flex-wrap justify-end gap-2"
+            data-lobby-chrome
+            className="absolute right-[max(0.5rem,env(safe-area-inset-right,0px))] top-[max(0.5rem,env(safe-area-inset-top,0px))] z-[25] flex max-w-[100vw] flex-wrap justify-end gap-2"
             onPointerDown={(e) => e.stopPropagation()}
             onPointerMove={(e) => e.stopPropagation()}
           >
@@ -1024,7 +1189,7 @@ export function LobbyClient() {
               type="button"
               size="sm"
               variant={lobbyMusicOn ? "secondary" : "outline"}
-              className="h-auto gap-1 border-border bg-muted/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="min-h-11 h-auto gap-1 border-border bg-muted/50 px-3 py-2 text-[10px] md:min-h-0 md:py-1.5 font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-pressed={lobbyMusicOn}
               aria-label={
                 lobbyMusicOn
@@ -1050,20 +1215,21 @@ export function LobbyClient() {
             </Button>
             <Link
               href="/leaderboard"
-              className="rounded-md border border-border bg-muted/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-0 md:py-1.5"
             >
               Leaderboard
             </Link>
             <Link
               href="/onboarding"
-              className="rounded-md border border-border bg-muted/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-0 md:py-1.5"
             >
               Settings
             </Link>
           </div>
 
           <div
-            className="absolute bottom-2 left-2 z-30 w-[min(calc(100%-1rem),304px)] max-w-[calc(100%-1rem)] touch-manipulation"
+            data-lobby-chrome
+            className="absolute bottom-[max(0.5rem,env(safe-area-inset-bottom,0px))] left-[max(0.5rem,env(safe-area-inset-left,0px))] z-30 w-[min(calc(100%-1rem),304px)] max-w-[calc(100%-1.25rem)] touch-manipulation"
             onPointerDown={(e) => e.stopPropagation()}
             onPointerMove={(e) => e.stopPropagation()}
           >
@@ -1131,7 +1297,7 @@ export function LobbyClient() {
                     </div>
                   </div>
                   <p className="relative z-[1] border-b border-border px-2 py-1 text-[9px] leading-snug text-muted-foreground">
-                    <span className="font-mono text-foreground">/w Name</span> whisper · WASD when chat
+                    <span className="font-mono text-foreground">/w Name</span> whisper · WASD / drag field when chat
                     unfocused
                   </p>
                   <ScrollArea
@@ -1224,14 +1390,14 @@ export function LobbyClient() {
                           chatFocusedRef.current = false;
                         }}
                         onKeyDown={(e) => e.key === "Enter" && sendChat()}
-                        className="h-8 w-full pr-9 text-[11px]"
+                        className="h-11 w-full pr-9 text-base md:h-8 md:text-[11px]"
                       />
                       <Sparkles
                         className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground opacity-50"
                         aria-hidden
                       />
                     </div>
-                    <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-xs" onClick={sendChat}>
+                    <Button type="button" size="sm" className="h-11 min-w-[44px] shrink-0 px-4 text-sm md:h-8 md:px-3 md:text-xs" onClick={sendChat}>
                       Send
                     </Button>
                   </div>
@@ -1240,11 +1406,7 @@ export function LobbyClient() {
             </AnimatePresence>
           </div>
 
-          <LobbyEggZone
-            online={online}
-            accentGeneration={accentGeneration}
-            visualPulse={visualRhythm}
-          />
+          <LobbyEggZone online={online} visualPulse={visualRhythm} />
 
           <AnimatePresence>
             {countdown !== null && countdown > 0 ? (
@@ -1263,23 +1425,23 @@ export function LobbyClient() {
           <LobbyPlayfieldAvatars
             swimmers={swimmers}
             me={me}
-            mock={mock}
             posRef={posRef}
-            accentGeneration={accentGeneration}
             visualRhythm={visualRhythm}
+            inEggZone={inEggZone}
             setSelectedProfileId={setSelectedProfileId}
             swimmerPrevPosRef={swimmerPrevPosRef}
             swimmerFacingRef={swimmerFacingRef}
-            playfieldRafFlushRef={playfieldRafFlushRef}
+            localAvatarButtonRef={localAvatarButtonRef}
+            localAvatarAnimFlushRef={localAvatarAnimFlushRef}
           />
         </div>
       </div>
 
       <div
-        className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-background px-3 py-2 md:px-4"
+        className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-border bg-background px-3 py-2 pb-safe md:flex-nowrap md:justify-between md:px-4"
         style={{ backgroundColor: REF.bg }}
       >
-        <Button variant="secondary" size="sm" asChild>
+        <Button variant="secondary" size="sm" className="min-h-11 touch-manipulation md:min-h-9" asChild>
           <Link href="/onboarding">Wardrobe</Link>
         </Button>
         <div className="flex flex-1 flex-wrap justify-center gap-2">
@@ -1290,15 +1452,12 @@ export function LobbyClient() {
             {mock ? "Mock" : "Live"}
           </Badge>
           {mock ? (
-            <Button size="sm" variant="secondary" asChild>
+            <Button size="sm" variant="secondary" className="min-h-11 touch-manipulation md:min-h-9" asChild>
               <Link href="/race/demo">Demo race</Link>
             </Button>
           ) : null}
         </div>
-        <Button variant="secondary" size="sm" asChild>
-          <Link href="/community-rules">Rules</Link>
-        </Button>
-        <Button size="sm" variant="outline" asChild>
+        <Button size="sm" variant="outline" className="min-h-11 touch-manipulation md:min-h-9" asChild>
           <Link href="/">Exit</Link>
         </Button>
       </div>
