@@ -991,6 +991,20 @@ export function LobbyClient() {
   }, []);
 
   useEffect(() => {
+    const onDoc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (selectedProfileId) return;
+      const t = e.target;
+      if (t instanceof HTMLInputElement && t.dataset.lobbyChat === "1") return;
+      if (t instanceof HTMLTextAreaElement) return;
+      e.preventDefault();
+      router.push("/onboarding");
+    };
+    document.addEventListener("keydown", onDoc);
+    return () => document.removeEventListener("keydown", onDoc);
+  }, [router, selectedProfileId]);
+
+  useEffect(() => {
     let raf = 0;
     const loop = () => {
       if (me && !mock) {
@@ -1216,7 +1230,7 @@ export function LobbyClient() {
 
   return (
     <div
-      className={cn("flex h-dvh flex-col overflow-hidden pt-safe font-sans text-zinc-100")}
+      className={cn("flex h-dvh flex-col overflow-hidden pt-safe pb-safe font-sans text-zinc-100")}
       style={{ backgroundColor: REF.bg }}
     >
       <div className="relative z-10 flex min-h-0 flex-1 p-2 px-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pb-0">
@@ -1272,12 +1286,6 @@ export function LobbyClient() {
               className="inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-0 md:py-1.5"
             >
               Leaderboard
-            </Link>
-            <Link
-              href="/onboarding"
-              className="inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-0 md:py-1.5"
-            >
-              Settings
             </Link>
           </div>
 
@@ -1351,8 +1359,9 @@ export function LobbyClient() {
                     </div>
                   </div>
                   <p className="relative z-[1] border-b border-border px-2 py-1 text-[9px] leading-snug text-muted-foreground">
-                    <span className="font-mono text-foreground">/w</span> then pick a name (list appears) ·{" "}
-                    <span className="font-mono text-foreground">/w Name message</span> · WASD when chat unfocused
+                    <span className="font-mono text-foreground">/w</span> then pick a name ·{" "}
+                    <span className="font-mono text-foreground">/w Name message</span> ·{" "}
+                    <span className="font-mono text-foreground">Esc</span> wardrobe · WASD when chat unfocused
                   </p>
                   <ScrollArea
                     className="relative z-[1] h-[min(28vh,200px)] p-2"
@@ -1462,6 +1471,7 @@ export function LobbyClient() {
                         </div>
                       ) : null}
                       <Input
+                        data-lobby-chat="1"
                         value={chatInput}
                         maxLength={MAX_CHAT_LEN}
                         placeholder={
@@ -1487,9 +1497,14 @@ export function LobbyClient() {
                             setWhisperSuggestHi((i) => Math.max(i - 1, 0));
                             return;
                           }
-                          if (e.key === "Escape" && open) {
+                          if (e.key === "Escape") {
                             e.preventDefault();
-                            setChatInput("");
+                            e.stopPropagation();
+                            if (open) {
+                              setChatInput("");
+                              return;
+                            }
+                            router.push("/onboarding");
                             return;
                           }
                           if (e.key === "Enter") {
@@ -1547,31 +1562,6 @@ export function LobbyClient() {
             localAvatarAnimFlushRef={localAvatarAnimFlushRef}
           />
         </div>
-      </div>
-
-      <div
-        className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-border bg-background px-3 py-2 pb-safe md:flex-nowrap md:justify-between md:px-4"
-        style={{ backgroundColor: REF.bg }}
-      >
-        <Button variant="secondary" size="sm" className="min-h-11 touch-manipulation md:min-h-9" asChild>
-          <Link href="/onboarding">Wardrobe</Link>
-        </Button>
-        <div className="flex flex-1 flex-wrap justify-center gap-2">
-          <Badge variant="outline" className="text-muted-foreground shadow-none">
-            {inEggZone ? "In zone" : "Outside"}
-          </Badge>
-          <Badge variant="outline" className="text-muted-foreground shadow-none">
-            {mock ? "Mock" : "Live"}
-          </Badge>
-          {mock ? (
-            <Button size="sm" variant="secondary" className="min-h-11 touch-manipulation md:min-h-9" asChild>
-              <Link href="/race/demo">Demo race</Link>
-            </Button>
-          ) : null}
-        </div>
-        <Button size="sm" variant="outline" className="min-h-11 touch-manipulation md:min-h-9" asChild>
-          <Link href="/">Exit</Link>
-        </Button>
       </div>
 
       <Dialog open={Boolean(selected)} onOpenChange={() => setSelectedProfileId(null)}>
