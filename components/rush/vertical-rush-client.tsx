@@ -200,7 +200,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       id,
       consumed: false,
     });
-    g.nextSpawn = g.scroll + 95 + g.rand() * 70;
+    g.nextSpawn = Math.max(g.nextSpawn, g.scroll) + 95 + g.rand() * 70;
   };
 
   const startRun = useCallback(() => {
