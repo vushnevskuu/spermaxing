@@ -20,11 +20,44 @@ type Racer = {
   loadout: AvatarLoadout;
   progress: number;
   score: number;
+  /** Bot lane 0–2 for rendering & hit tests; player uses laneRef. */
+  lane?: number;
 };
 
 function obstacleAt(seed: number, i: number): { t: number; lane: number } {
   const v = Math.abs((seed * 9301 + i * 49297) % 233280) / 233280;
   return { t: 0.08 + v * 0.82, lane: Math.floor(v * 3) % 3 };
+}
+
+function nearestObstacleAhead(seed: number, u: number): { t: number; lane: number } | null {
+  let best: { t: number; lane: number } | null = null;
+  for (let i = 0; i < 8; i++) {
+    const o = obstacleAt(seed, i);
+    if (o.t <= u + 0.012) continue;
+    if (!best || o.t < best.t) best = o;
+  }
+  return best;
+}
+
+function pickBotTargetLane(seed: number, u: number, botLane: number): number {
+  const next = nearestObstacleAhead(seed, u);
+  if (!next || next.t > u + 0.14) {
+    return Math.max(0, Math.min(2, botLane + (1 - botLane) * 0.055));
+  }
+  const candidates = [0, 1, 2].filter((l) => l !== next.lane);
+  let best = candidates[0] ?? 1;
+  for (const c of candidates) {
+    if (Math.abs(c - botLane) < Math.abs(best - botLane)) best = c;
+  }
+  return best;
+}
+
+function checkObstacleHit(seed: number, u: number, lane: number): boolean {
+  for (let i = 0; i < 8; i++) {
+    const o = obstacleAt(seed, i);
+    if (Math.abs(u - o.t) < 0.018 && Math.round(lane) === o.lane) return true;
+  }
+  return false;
 }
 
 export function RaceClient({ roomId }: { roomId: string }) {
@@ -45,12 +78,16 @@ export function RaceClient({ roomId }: { roomId: string }) {
   const botSpeedRef = useRef(0.00011);
   const finishedRef = useRef(false);
   const savedResultRef = useRef(false);
+  const boostMeterRef = useRef<HTMLDivElement | null>(null);
+  const hitOverlayRef = useRef<HTMLDivElement | null>(null);
+  const hitFlashRef = useRef(0);
 
   const demo = roomId === "demo";
 
   const init = useCallback(async () => {
     finishedRef.current = false;
     savedResultRef.current = false;
+    hitFlashRef.current = 0;
     const local = loadLocalProfile();
     if (!local) {
       router.replace("/enter");
@@ -70,6 +107,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
       },
       progress: 0,
       score: 0,
+      lane: 1,
     };
 
     if (!demo && isSupabaseConfigured()) {
@@ -107,6 +145,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
           },
           progress: 0,
           score: 0,
+          lane: 1,
         };
       }
     }
@@ -132,7 +171,8 @@ export function RaceClient({ roomId }: { roomId: string }) {
       score: 0,
     };
 
-    setRacers([meRacer, opponent]);
+    laneRef.current = 1;
+    setRacers([meRacer, { ...opponent, lane: opponent.lane ?? 1 }]);
     startRef.current = 0;
     setRacePhase("warmup");
     setWarmupLabel("3");
@@ -190,14 +230,24 @@ export function RaceClient({ roomId }: { roomId: string }) {
   useEffect(() => {
     if (!me || racePhase !== "racing" || racers.length < 2) return;
 
+    const loadout: AvatarLoadout = {
+      avatarName: me.avatarName,
+      colorTheme: me.colorTheme,
+      tailType: me.tailType,
+      auraEffect: me.auraEffect,
+      headgear: me.headgear,
+      faceExtra: me.faceExtra,
+      neckWear: me.neckWear,
+    };
+    const laneStep = 0.07 + computeLoadoutStats(loadout).handling * 0.00035;
+
     const loop = (now: number) => {
       if (finishedRef.current) return;
       const t = now - startRef.current;
       const dur = durationRef.current;
       const u = Math.min(1, t / dur);
-
-      if (keysRef.current["ArrowLeft"]) laneRef.current = Math.max(0, laneRef.current - 0.1);
-      if (keysRef.current["ArrowRight"]) laneRef.current = Math.min(2, laneRef.current + 0.1);
+      if (keysRef.current["ArrowLeft"]) laneRef.current = Math.max(0, laneRef.current - laneStep);
+      if (keysRef.current["ArrowRight"]) laneRef.current = Math.min(2, laneRef.current + laneStep);
 
       setRacers((prev) => {
         if (prev.length < 2) return prev;
@@ -206,21 +256,26 @@ export function RaceClient({ roomId }: { roomId: string }) {
         if (!myR || !botR) return prev;
 
         const myStats = computeLoadoutStats(myR.loadout);
-        let hit = false;
-        for (let i = 0; i < 8; i++) {
-          const o = obstacleAt(seedRef.current, i);
-          if (Math.abs(u - o.t) < 0.018 && Math.round(laneRef.current) === o.lane) {
-            hit = true;
-          }
-        }
+        const hit = checkObstacleHit(seedRef.current, u, laneRef.current);
+        if (hit) hitFlashRef.current = 1;
 
         const impulse = boostRef.current;
         boostRef.current = Math.max(0, impulse - 0.004);
 
         const base = 0.0001 + myStats.speed * 1.2e-7;
         const myDelta = (hit ? base * 0.4 : base * 1.08) + impulse * 0.00025 + myStats.boost * 8e-8;
-        const botDelta =
-          botSpeedRef.current * (0.88 + Math.sin(now / 420) * 0.06);
+
+        const botLanePrev = botR.lane ?? 1;
+        const targetLane = pickBotTargetLane(seedRef.current, u, botLanePrev);
+        const botLaneNext = Math.max(
+          0,
+          Math.min(2, botLanePrev + (targetLane - botLanePrev) * 0.13)
+        );
+        const botHit = checkObstacleHit(seedRef.current, u, botLaneNext);
+        const botStats = computeLoadoutStats(botR.loadout);
+        let botDelta =
+          botSpeedRef.current * (0.88 + Math.sin(now / 420) * 0.06) + botStats.boost * 6e-8;
+        botDelta *= botHit ? 0.42 : 1.06;
 
         const myNext = Math.min(1, myR.progress + myDelta);
         const botNext = Math.min(1, botR.progress + botDelta);
@@ -236,7 +291,8 @@ export function RaceClient({ roomId }: { roomId: string }) {
           return {
             ...r,
             progress: botNext,
-            score: r.score + 1,
+            score: r.score + (botHit ? -1 : 2),
+            lane: botLaneNext,
           };
         });
 
@@ -250,6 +306,17 @@ export function RaceClient({ roomId }: { roomId: string }) {
 
         return next;
       });
+
+      hitFlashRef.current *= 0.88;
+      const el = hitOverlayRef.current;
+      if (el) {
+        const a = Math.min(0.45, hitFlashRef.current * 0.35);
+        el.style.backgroundColor = a > 0.02 ? `rgba(248,113,113,${a})` : "transparent";
+      }
+      const bm = boostMeterRef.current;
+      if (bm) {
+        bm.style.width = `${Math.min(100, (boostRef.current / 0.12) * 100)}%`;
+      }
 
       rafRef.current = requestAnimationFrame(loop);
     };
@@ -312,6 +379,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
 
   const botR = racers.find((r) => r.id !== me.id);
   const botProg = botR?.progress ?? 0;
+  const botLaneVis = botR?.lane ?? 1;
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
@@ -359,6 +427,12 @@ export function RaceClient({ roomId }: { roomId: string }) {
                 }}
               />
 
+              <div
+                ref={hitOverlayRef}
+                className="pointer-events-none absolute inset-0 z-[15]"
+                style={{ backgroundColor: "transparent" }}
+              />
+
               <div className="absolute left-0 right-0 top-0 z-20 h-2 bg-black/60 px-1 pt-1">
                 <div className="flex h-1 gap-1 overflow-hidden rounded-full bg-white/10">
                   <motion.div
@@ -374,20 +448,28 @@ export function RaceClient({ roomId }: { roomId: string }) {
                 </div>
               </div>
 
-              <div className="absolute left-3 right-3 top-11 z-10 flex justify-between text-[10px] font-mono text-muted-foreground">
-                <span>← → lanes</span>
-                <span className="text-foreground/80">Space · BOOST</span>
+              <div className="absolute left-3 right-3 top-11 z-10 flex flex-col gap-1.5 text-[10px] font-mono text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>← → lanes (loadout handling)</span>
+                  <span className="text-foreground/80">Space · BOOST</span>
+                </div>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+                  <div
+                    ref={boostMeterRef}
+                    className="h-full w-0 rounded-full bg-cyan-400/90 shadow-[0_0_10px_rgba(34,211,238,0.35)] transition-[width] duration-75"
+                  />
+                </div>
               </div>
 
               {[0, 1, 2].map((lane) => (
                 <div
                   key={lane}
-                  className="absolute bottom-0 top-14 z-[1] w-px bg-gradient-to-b from-white/15 via-white/8 to-transparent"
+                  className="absolute bottom-0 top-[4.75rem] z-[1] w-px bg-gradient-to-b from-white/15 via-white/8 to-transparent"
                   style={{ left: `${20 + lane * 30}%` }}
                 />
               ))}
 
-              <div className="absolute inset-x-0 bottom-0 top-14 z-[2]">
+              <div className="absolute inset-x-0 bottom-0 top-[4.75rem] z-[2]">
                 {Array.from({ length: 8 }).map((_, i) => {
                   const o = obstacleAt(seedRef.current, i);
                   return (
@@ -400,9 +482,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
                       }}
                       aria-hidden
                     >
-                      <div
-                        className="h-5 w-5 rotate-45 rounded-sm border border-white/25 bg-white/10"
-                      />
+                      <div className="h-5 w-5 rotate-45 rounded-sm border border-rose-400/35 bg-rose-500/15 shadow-[0_0_12px_rgba(244,63,94,0.25)]" />
                     </div>
                   );
                 })}
@@ -410,13 +490,13 @@ export function RaceClient({ roomId }: { roomId: string }) {
                 <motion.div
                   className="absolute z-[5] -translate-x-1/2 -translate-y-1/2"
                   style={{
-                    left: `${20 + Math.round(laneRef.current) * 30}%`,
+                    left: `${20 + laneRef.current * 30}%`,
                     top: `${14 + (1 - prog) * 72}%`,
                   }}
                   layout
                   transition={{ type: "spring", stiffness: 280, damping: 28 }}
                 >
-                  <div className="rounded-full p-0.5 ring-1 ring-white/20">
+                  <div className="rounded-full p-0.5 ring-1 ring-cyan-400/30">
                     {meR ? (
                       <SwimmerAvatar
                         colorTheme={meR.loadout.colorTheme}
@@ -434,11 +514,12 @@ export function RaceClient({ roomId }: { roomId: string }) {
 
                 {botR ? (
                   <motion.div
-                    className="absolute z-[4] -translate-x-1/2 -translate-y-1/2 opacity-75"
+                    className="absolute z-[4] -translate-x-1/2 -translate-y-1/2 opacity-80"
                     style={{
-                      left: `${20 + 1 * 30}%`,
+                      left: `${20 + botLaneVis * 30}%`,
                       top: `${14 + (1 - botProg) * 72}%`,
                     }}
+                    transition={{ type: "spring", stiffness: 200, damping: 24 }}
                   >
                     <SwimmerAvatar
                       colorTheme={botR.loadout.colorTheme}
