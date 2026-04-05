@@ -3,7 +3,17 @@
  * Иконки на треке — здесь (`drawPickupOrObstacle`). После подбора на персонаже — `SwimmerRushEquippedLayers` / `RushEquippedFlags`.
  */
 
-import { BAD_ITEMS, GOOD_ITEMS, OBSTACLES, type BadId, type GoodId, type ObstacleId } from "@/lib/vertical-rush-catalog";
+import {
+  BAD_ITEMS,
+  BAD_TRACK_TAGS,
+  GOOD_ITEMS,
+  GOOD_TRACK_TAGS,
+  OBSTACLES,
+  OBSTACLE_TRACK_TAGS,
+  type BadId,
+  type GoodId,
+  type ObstacleId,
+} from "@/lib/vertical-rush-catalog";
 
 const TAU = Math.PI * 2;
 
@@ -50,6 +60,99 @@ function strokeRoundRect(
   ctx.lineTo(x, y + rr);
   ctx.quadraticCurveTo(x, y, x + rr, y);
   ctx.closePath();
+}
+
+function fillRoundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  strokeRoundRect(ctx, x, y, w, h, r);
+  ctx.fill();
+}
+
+/** Рамки разных форм: бафф / дебафф / стена — считываются мгновенно. */
+function drawPickupKindFrame(ctx: CanvasRenderingContext2D, cx: number, cy: number, kind: "good" | "bad" | "obs") {
+  if (kind === "good") {
+    ctx.strokeStyle = "rgba(34,211,238,0.95)";
+    ctx.lineWidth = 4;
+    ctx.shadowColor = "rgba(34,211,238,0.55)";
+    ctx.shadowBlur = 14;
+    strokeRoundRect(ctx, cx - 29, cy - 29, 58, 58, 14);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(165,243,252,0.5)";
+    ctx.lineWidth = 1.5;
+    strokeRoundRect(ctx, cx - 25, cy - 25, 50, 50, 11);
+    ctx.stroke();
+    return;
+  }
+  if (kind === "bad") {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI / 4);
+    ctx.strokeStyle = "rgba(244,114,182,0.95)";
+    ctx.lineWidth = 3.5;
+    ctx.setLineDash([6, 5]);
+    ctx.shadowColor = "rgba(236,72,153,0.45)";
+    ctx.shadowBlur = 12;
+    strokeRoundRect(ctx, -24, -24, 48, 48, 6);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "rgba(251,113,133,0.55)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    strokeRoundRect(ctx, -20, -20, 40, 40, 4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    return;
+  }
+  ctx.strokeStyle = "rgba(248,113,113,0.95)";
+  ctx.lineWidth = 3.5;
+  ctx.shadowColor = "rgba(239,68,68,0.5)";
+  ctx.shadowBlur = 14;
+  strokeRoundRect(ctx, cx - 30, cy - 26, 60, 52, 5);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(254,202,202,0.12)";
+  fillRoundRect(ctx, cx - 27, cy - 23, 54, 46, 4);
+  ctx.strokeStyle = "rgba(254,202,202,0.55)";
+  ctx.lineWidth = 2;
+  strokeRoundRect(ctx, cx - 27, cy - 23, 54, 46, 4);
+  ctx.stroke();
+}
+
+/** Плашка с тегом под предметом. */
+function drawTrackTag(ctx: CanvasRenderingContext2D, cx: number, cy: number, tag: string, kind: "good" | "bad" | "obs") {
+  ctx.save();
+  ctx.font = "900 11px ui-sans-serif, system-ui, sans-serif";
+  const padX = 6;
+  const w = Math.max(26, ctx.measureText(tag).width + padX * 2);
+  const h = 16;
+  const x = cx - w / 2;
+  const y = cy + 22;
+  const bg =
+    kind === "good"
+      ? "rgba(8,145,178,0.92)"
+      : kind === "bad"
+        ? "rgba(190,24,93,0.92)"
+        : "rgba(185,28,28,0.9)";
+  ctx.fillStyle = bg;
+  fillRoundRect(ctx, x, y, w, h, 4);
+  ctx.strokeStyle = "rgba(255,255,255,0.45)";
+  ctx.lineWidth = 1;
+  strokeRoundRect(ctx, x, y, w, h, 4);
+  ctx.stroke();
+  ctx.fillStyle = "#f8fafc";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(tag, cx, y + h / 2);
+  ctx.restore();
 }
 
 /** OVUM climb tunnel: neon ovum-field, parallax grid, soft “flow” curves (cartoon, non-explicit). */
@@ -683,7 +786,12 @@ export function drawPickupOrObstacle(
 ) {
   const t = nowMs * 0.003;
   const accent = catalogColor(kind, id);
-  drawItemAura(ctx, cx, cy, accent, kind === "obs" ? 36 : 32, kind === "good" ? 0.42 : kind === "bad" ? 0.38 : 0.32);
+  drawItemAura(ctx, cx, cy, accent, kind === "obs" ? 34 : 30, kind === "good" ? 0.32 : kind === "bad" ? 0.28 : 0.24);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1.14, 1.14);
+  ctx.translate(-cx, -cy);
 
   if (kind === "good") {
     switch (id as GoodId) {
@@ -703,22 +811,7 @@ export function drawPickupOrObstacle(
         drawGoodCitrus(ctx, cx, cy, t);
         break;
     }
-    ctx.strokeStyle = "rgba(34,211,238,0.75)";
-    ctx.lineWidth = 3;
-    ctx.shadowColor = "rgba(34,211,238,0.55)";
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 25, 0, TAU);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(250, 250, 255, 0.35)";
-    ctx.lineWidth = 1.25;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 22, 0, TAU);
-    ctx.stroke();
-    return;
-  }
-  if (kind === "bad") {
+  } else if (kind === "bad") {
     switch (id as BadId) {
       case "chips":
         drawBadChips(ctx, cx, cy, t);
@@ -736,53 +829,36 @@ export function drawPickupOrObstacle(
         drawBadSugarCube(ctx, cx, cy, t);
         break;
     }
-    ctx.strokeStyle = "rgba(244,114,182,0.65)";
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = "rgba(244,114,182,0.4)";
-    ctx.shadowBlur = 8;
-    ctx.setLineDash([5, 4]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, 26, 0, TAU);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.setLineDash([]);
-    ctx.strokeStyle = "rgba(251, 113, 133, 0.35)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 4]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, 22, 0, TAU);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    return;
+  } else {
+    switch (id as ObstacleId) {
+      case "laptop":
+        drawObsLaptop(ctx, cx, cy, t);
+        break;
+      case "shower":
+        drawObsShower(ctx, cx, cy, t);
+        break;
+      case "belt":
+        drawObsBelt(ctx, cx, cy, t);
+        break;
+      case "stress":
+        drawObsStress(ctx, cx, cy, t);
+        break;
+      case "dry_wind":
+        drawObsDryWind(ctx, cx, cy, t);
+        break;
+    }
   }
-  switch (id as ObstacleId) {
-    case "laptop":
-      drawObsLaptop(ctx, cx, cy, t);
-      break;
-    case "shower":
-      drawObsShower(ctx, cx, cy, t);
-      break;
-    case "belt":
-      drawObsBelt(ctx, cx, cy, t);
-      break;
-    case "stress":
-      drawObsStress(ctx, cx, cy, t);
-      break;
-    case "dry_wind":
-      drawObsDryWind(ctx, cx, cy, t);
-      break;
-  }
-  ctx.strokeStyle = "rgba(248,113,113,0.85)";
-  ctx.lineWidth = 2.5;
-  ctx.shadowColor = "rgba(239, 68, 68, 0.45)";
-  ctx.shadowBlur = 12;
-  strokeRoundRect(ctx, cx - 27, cy - 23, 54, 46, 6);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "rgba(254, 202, 202, 0.4)";
-  ctx.lineWidth = 1.25;
-  strokeRoundRect(ctx, cx - 24, cy - 20, 48, 40, 4);
-  ctx.stroke();
+
+  ctx.restore();
+
+  drawPickupKindFrame(ctx, cx, cy, kind);
+  const tag =
+    kind === "good"
+      ? GOOD_TRACK_TAGS[id as GoodId]
+      : kind === "bad"
+        ? BAD_TRACK_TAGS[id as BadId]
+        : OBSTACLE_TRACK_TAGS[id as ObstacleId];
+  drawTrackTag(ctx, cx, cy, tag, kind);
 }
 
 export function drawProjectile(ctx: CanvasRenderingContext2D, cx: number, cy: number, nowMs: number) {

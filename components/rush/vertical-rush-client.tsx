@@ -32,9 +32,15 @@ const COLL_BODY = 38;
 const LANE_HEAD = 0.36;
 const LANE_BODY = 0.42;
 const RIVAL_DESCENT = 158;
-const RIVAL_BUMP_HP = 12;
 const BASE_SPEED = 195;
 const METERS_SCALE = 1 / 12;
+/** Импульс (0…paceMax): и «жизнь», и доля скорости; постоянно тлеет. */
+const PACE_START = 100;
+const PACE_DECAY_PER_SEC = 3.1;
+const PACE_DEATH_BELOW = 0.75;
+const RIVAL_PACE_HIT = 12;
+const STRIDE_MULT_MIN = 0.48;
+const STRIDE_MULT_MAX = 1.95;
 const MAX_SWEET_STACK = 12;
 const MAX_ZINC_STACK = 5;
 const MAX_GARLIC_STACK = 5;
@@ -97,8 +103,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   const [countdown, setCountdown] = useState<number | null>(null);
   const [hud, setHud] = useState({
     m: 0,
-    hp: 100,
-    maxHp: 100,
+    pace: PACE_START,
+    paceMax: PACE_START,
     ammo: 0,
     canShoot: false,
     toast: "" as string,
@@ -118,9 +124,10 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   const game = useRef({
     scroll: 0,
     laneF: 1,
-    hp: 100,
-    maxHp: 100,
-    speedMult: 1,
+    pace: PACE_START,
+    paceMax: PACE_START,
+    /** Множитель скорости поверх доли импульса (омега, цинк, дебаффы). */
+    strideMult: 1,
     armor: 0,
     canShoot: false,
     ammo: 0,
@@ -179,6 +186,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     const now = performance.now();
     setHud((h) => ({
       ...h,
+      pace: Math.round(g.pace),
+      paceMax: Math.round(g.paceMax),
       rushEquipped: { ...g.rushEquipped },
       sweetStack: g.sweetStack,
       onionShieldCharges: g.onionShieldCharges,
@@ -221,37 +230,38 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     switch (id) {
       case "zinc":
         if (g.zincCount >= MAX_ZINC_STACK) {
-          g.hp = Math.min(g.maxHp, g.hp + 6);
-          pushToast(g, "Zinc faded (+HP only)");
+          g.pace = Math.min(g.paceMax, g.pace + 6);
+          pushToast(g, "Zinc faded (+impulse only)");
           break;
         }
         g.zincCount += 1;
-        g.hp = Math.min(g.maxHp, g.hp + 18);
-        g.speedMult = Math.min(1.9, g.speedMult * 1.085);
-        pushToast(g, `Zinc ${g.zincCount}/${MAX_ZINC_STACK}: +HP · faster`);
+        g.pace = Math.min(g.paceMax, g.pace + 18);
+        g.strideMult = Math.min(STRIDE_MULT_MAX, g.strideMult * 1.085);
+        pushToast(g, `Zinc ${g.zincCount}/${MAX_ZINC_STACK}: +impulse · stride`);
         break;
       case "omega":
-        g.speedMult = Math.min(1.55, g.speedMult * 1.12);
+        g.strideMult = Math.min(STRIDE_MULT_MAX, g.strideMult * 1.12);
+        g.pace = Math.min(g.paceMax, g.pace + 12);
         g.omegaShieldCharges = 2;
-        pushToast(g, "Omega: +speed · bubble ×2");
+        pushToast(g, "Omega: +stride · bubble ×2");
         break;
       case "garlic":
         if (g.garlicCount >= MAX_GARLIC_STACK) {
-          g.hp = Math.min(g.maxHp, g.hp + 10);
-          pushToast(g, "Garlic maxed — small heal");
+          g.pace = Math.min(g.paceMax, g.pace + 12);
+          pushToast(g, "Garlic maxed — small pulse");
           break;
         }
         g.garlicCount += 1;
-        g.maxHp += 10;
-        g.hp = Math.min(g.maxHp, g.hp + 26);
+        g.paceMax += 10;
+        g.pace = Math.min(g.paceMax, g.pace + 26);
         g.armor = Math.min(0.45, g.armor + 0.1);
-        pushToast(g, `Garlic ${g.garlicCount}/${MAX_GARLIC_STACK}: +max HP & heal`);
+        pushToast(g, `Garlic ${g.garlicCount}/${MAX_GARLIC_STACK}: +max pulse & heal`);
         break;
       case "onion_ring":
-        g.maxHp += 12;
-        g.hp = Math.min(g.maxHp, g.hp + 8);
+        g.paceMax += 12;
+        g.pace = Math.min(g.paceMax, g.pace + 8);
         g.onionShieldCharges = 1;
-        pushToast(g, "Onion ring: +max HP · whiff ×1");
+        pushToast(g, "Onion ring: +max pulse · whiff ×1");
         break;
       case "citrus": {
         const t = performance.now();
@@ -262,6 +272,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         break;
       }
     }
+    // Джанк раздувает глаза (sweetStack); каждый бафф слегка «сдувает» обратно.
+    g.sweetStack = Math.max(0, g.sweetStack - 1);
     syncRushHud(g);
   };
 
@@ -272,26 +284,26 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     }
     switch (id) {
       case "chips":
-        g.speedMult = Math.max(0.55, g.speedMult * 0.88);
+        g.strideMult = Math.max(STRIDE_MULT_MIN, g.strideMult * 0.88);
         g.slowUntil = performance.now() + 3800;
         pushToast(g, "Chips: slowed");
         break;
       case "candy":
-        g.speedMult = Math.max(0.62, g.speedMult * 0.9);
-        g.hp -= 6;
-        pushToast(g, "Candy: sticky, −HP");
+        g.strideMult = Math.max(STRIDE_MULT_MIN, g.strideMult * 0.9);
+        g.pace = Math.max(0, g.pace - 6);
+        pushToast(g, "Candy: sticky, −pulse");
         break;
       case "soda":
-        g.hp -= 10;
+        g.pace = Math.max(0, g.pace - 10);
         g.slowUntil = performance.now() + 2800;
         pushToast(g, "Soda: bloated");
         break;
       case "fried_ring":
-        g.speedMult = Math.max(0.5, g.speedMult * 0.82);
+        g.strideMult = Math.max(STRIDE_MULT_MIN, g.strideMult * 0.82);
         pushToast(g, "Fried ring: greased");
         break;
       case "sugar_cube":
-        g.hp -= 14;
+        g.pace = Math.max(0, g.pace - 14);
         g.stunUntil = performance.now() + 420;
         pushToast(g, "Sugar crash!");
         break;
@@ -345,9 +357,9 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     const g = game.current;
     g.scroll = 0;
     g.laneF = 1;
-    g.hp = 100;
-    g.maxHp = 100;
-    g.speedMult = 1;
+    g.pace = PACE_START;
+    g.paceMax = PACE_START;
+    g.strideMult = 1;
     g.armor = 0;
     g.canShoot = false;
     g.ammo = 0;
@@ -368,8 +380,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     g.citrusFrenzyUntil = 0;
     setHud({
       m: 0,
-      hp: 100,
-      maxHp: 100,
+      pace: PACE_START,
+      paceMax: PACE_START,
       ammo: 0,
       canShoot: false,
       toast: "",
@@ -471,7 +483,13 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       last = now;
 
       const citrusFrenzy = now < g.citrusFrenzyUntil;
-      if (citrusFrenzy && g.hp < 1) g.hp = 1;
+      if (citrusFrenzy && g.pace < 12) g.pace = Math.min(g.paceMax, 12);
+
+      if (!citrusFrenzy) {
+        let decay = PACE_DECAY_PER_SEC * dt;
+        if (now < g.slowUntil) decay *= 1.38;
+        g.pace = Math.max(0, g.pace - decay);
+      }
 
       if (keys["ArrowLeft"] && (citrusFrenzy || now > g.stunUntil)) {
         g.laneF = Math.max(0, g.laneF - 2.4 * dt);
@@ -484,11 +502,12 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         fire();
       }
 
-      let sm = g.speedMult;
+      const paceRatio = g.pace / Math.max(1, g.paceMax);
+      let sm = g.strideMult;
       if (citrusFrenzy) sm *= 2.35;
       else if (now < g.slowUntil) sm *= 0.72;
 
-      const v = BASE_SPEED * sm;
+      const v = BASE_SPEED * paceRatio * sm;
       g.scroll += v * dt;
 
       while (g.scroll + 400 > g.nextSpawn) spawnEntity(g);
@@ -510,8 +529,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           if (citrusFrenzy) {
             /* комета сносит соперника без урона */
           } else if (!tryAbsorbBump(g)) {
-            g.hp -= RIVAL_BUMP_HP;
-            pushToast(g, `Rival bump! −${RIVAL_BUMP_HP} HP`);
+            g.pace = Math.max(0, g.pace - RIVAL_PACE_HIT);
+            pushToast(g, `Rival bump! −${RIVAL_PACE_HIT} pulse`);
           }
           continue;
         }
@@ -536,8 +555,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           } else if (!tryAbsorbBump(g)) {
             const obs = OBSTACLES.find((o) => o.id === e.id);
             const dmg = Math.max(1, Math.round((obs?.damage ?? 10) * (1 - g.armor)));
-            g.hp -= dmg;
-            pushToast(g, `Hit! −${dmg} HP`);
+            g.pace = Math.max(0, g.pace - dmg);
+            pushToast(g, `Hit! −${dmg} pulse`);
           }
         }
       }
@@ -557,8 +576,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         return p.pos < g.scroll + 800;
       });
 
-      if (g.hp <= 0) {
-        g.hp = 0;
+      if (g.pace <= PACE_DEATH_BELOW) {
+        g.pace = 0;
         setPhase("dead");
         const meters = Math.floor(g.scroll * METERS_SCALE);
         try {
@@ -595,8 +614,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           now < g.toastUntil ? g.toastText : "";
         setHud({
           m: Math.floor(g.scroll * METERS_SCALE),
-          hp: Math.round(g.hp),
-          maxHp: Math.round(g.maxHp),
+          pace: Math.round(g.pace),
+          paceMax: Math.round(g.paceMax),
           ammo: g.ammo,
           canShoot: g.canShoot,
           toast,
@@ -737,9 +756,9 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
       {!embed ? (
         <p className="text-center text-[11px] leading-snug text-muted-foreground">
-          Nokia-style climb: strafe lanes. Zinc (up to 5) greys your swimmer and stacks speed; Garlic is rarer (up to 5)
-          for max HP & heal. Citrus = 2s orange comet: invincible, vaporize walls & rivals, super speed + shots. Parody
-          props — not medical advice.
+          Pulse always drains (that is your speed) — buffs refill it and raise the cap. Buffs: cyan rounded frames +
+          tags; junk: pink tilted dashed squares; walls: red boxes. Zinc greys you (×5); Citrus comet 2s. Parody only —
+          not medical advice.
         </p>
       ) : null}
 
@@ -775,14 +794,13 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           <div className="w-full max-w-sm space-y-3 rounded-lg border border-purple-500/25 bg-card/40 px-3 py-3 text-left text-[10px] leading-relaxed text-muted-foreground">
             <p className="font-semibold text-foreground/90">On the track</p>
             <p className="text-foreground/70">
-              Buffs and junk count only if your head touches them — the tail does nothing. Rivals (grey swimmer + pink
-              warning ring) and red obstacle walls cost HP on bump unless a shield charge absorbs it (Onion whiff or
-              Omega bubble stack; if both are up, which one pops is random). Candy / soda / sugar stack: bigger eyes and
-              faster pupils — parody
+              Pulse (HUD) drains constantly and sets how fast you climb — only head picks up buffs/junk. Rivals and
+              walls eat pulse on hit unless a shield pops (Onion or Omega; random if both). Read pickups by frame shape +
+              tag under the art. Candy / soda / sugar swell the eyes; buff pickups shrink them back — parody
               only, not medical advice.
             </p>
             <div>
-              <p className="mb-1 font-medium text-cyan-300/90">Buffs (cyan outline)</p>
+              <p className="mb-1 font-medium text-cyan-300/90">Buffs — cyan rounded frame</p>
               <ul className="list-inside list-disc space-y-0.5">
                 {GOOD_ITEMS.map((it) => (
                   <li key={it.id}>
@@ -792,7 +810,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
               </ul>
             </div>
             <div>
-              <p className="mb-1 font-medium text-pink-300/90">Junk (pink dashed outline)</p>
+              <p className="mb-1 font-medium text-pink-300/90">Junk — pink dashed diamond</p>
               <ul className="list-inside list-disc space-y-0.5">
                 {BAD_ITEMS.map((it) => (
                   <li key={it.id}>
@@ -802,7 +820,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
               </ul>
             </div>
             <div>
-              <p className="mb-1 font-medium text-red-300/90">Obstacles (red frame) — crash = −HP</p>
+              <p className="mb-1 font-medium text-red-300/90">Obstacles — red hazard box = −pulse</p>
               <ul className="list-inside list-disc space-y-0.5">
                 {OBSTACLES.map((it) => (
                   <li key={it.id}>
@@ -879,7 +897,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
             <div className="mt-2 grid grid-cols-3 gap-1 text-center font-mono text-[10px] text-muted-foreground">
               <span>{hud.m} m</span>
               <span>
-                HP {hud.hp}/{hud.maxHp}
+                Pulse {hud.pace}/{hud.paceMax}
               </span>
               <span>{hud.canShoot ? `Shots ${hud.ammo}` : "No shots"}</span>
             </div>
