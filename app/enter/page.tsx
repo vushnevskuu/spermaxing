@@ -46,16 +46,16 @@ export default function EnterPage() {
           let msg: string;
           if (res.status === 401) {
             msg =
-              "Сессия не найдена. Обнови страницу и попробуй снова (или отключи блокировку куков для сайта).";
+              "No active session. Refresh and try again, or allow cookies for this site (blocking them signs you out).";
           } else if (res.status === 409) {
             msg =
-              "Этот ник уже занят другим входом (другой браузер, инкогнито или после очистки данных сайта). Зайди с того же браузера, где уже регистрировался, или выбери другой ник.";
+              "That nickname is already tied to another anonymous login. Use the same browser where you first picked it (don’t clear site data), or choose a different nickname. Beta: there’s no account recovery yet.";
           } else if (typeof j.error === "string") {
             msg = j.error;
           } else if (j.error && typeof j.error === "object" && "formErrors" in j.error) {
-            msg = "Проверь формат ника.";
+            msg = "Check the nickname format.";
           } else {
-            msg = "Сервер отклонил ник. Попробуй ещё раз.";
+            msg = "The server couldn’t save that nickname. Try again.";
           }
           throw new Error(msg);
         }
@@ -84,7 +84,9 @@ export default function EnterPage() {
         <CardHeader>
           <CardTitle className="font-black">Pick a nickname</CardTitle>
           <CardDescription>
-            We&apos;ll remember you on this device. Customize your look later in the wardrobe.
+            We&apos;ll remember you on this device via your browser session. Clearing site data or switching
+            browser/incognito starts a fresh login — your old nickname may look &quot;taken&quot;. Customize your look
+            later in the wardrobe.
           </CardDescription>
         </CardHeader>
         <CardContent>
