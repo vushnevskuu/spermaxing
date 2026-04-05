@@ -1235,7 +1235,8 @@ export function LobbyClient() {
       return;
     }
     if (mock) {
-      const s = swimmers.find((x) => x.profileId === selectedProfileId);
+      // swimmers меняется каждый тик позиций — не включать в deps, иначе бесконечный loading/ready.
+      const s = swimmersRef.current.find((x) => x.profileId === selectedProfileId);
       if (!s) {
         setPeekCard(null);
         setPeekStatus("error");
@@ -1266,7 +1267,7 @@ export function LobbyClient() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProfileId, me, mock, swimmers]);
+  }, [selectedProfileId, me, mock]);
 
   async function submitReport() {
     if (!reportTarget) return;
