@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/mock-mode";
 import { registerNickSchema } from "@/lib/validation";
 import { sanitizePublicText } from "@/lib/sanitize";
-import { containsProfanity } from "@/lib/profanity";
 
 const DEFAULT_AVATAR = {
   avatar_name: "SpringBean",
@@ -33,9 +32,6 @@ export async function POST(req: Request) {
   }
 
   const nickname = sanitizePublicText(parsed.data.nickname, 20);
-  if (containsProfanity(nickname)) {
-    return NextResponse.json({ error: "Nickname failed moderation" }, { status: 422 });
-  }
 
   const supabase = await createClient();
   const {

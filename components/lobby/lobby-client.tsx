@@ -49,6 +49,7 @@ import { cosmeticsForSeed, parseFaceExtraId, parseHeadgearId, parseNeckWearId } 
 import { CHAT_RATE_MS, MAX_CHAT_LEN } from "@/lib/constants";
 import { sanitizePublicText } from "@/lib/sanitize";
 import { parseChatCommand, parseWhisperAutocompleteState } from "@/lib/chat-parse";
+import { playLobbyWhisperChime } from "@/lib/lobby-whisper-chime";
 import { cn } from "@/lib/utils";
 import {
   applyEggCoreRepulsion,
@@ -811,6 +812,7 @@ export function LobbyClient() {
   /* Чат: история из БД, затем Realtime */
   useEffect(() => {
     if (!me || mock) return;
+    const myProfileId = me.id;
     const supabase = createClient();
     let cancelled = false;
     let chatChannel: RealtimeChannel | null = null;
@@ -890,8 +892,13 @@ export function LobbyClient() {
                 hmap.get(m.recipient_profile_id)?.nick ??
                 "???"
               : null;
+            const incomingWhisperToMe =
+              Boolean(m.recipient_profile_id) &&
+              m.recipient_profile_id === myProfileId &&
+              m.profile_id !== myProfileId;
             setMessages((prev) => {
               if (prev.some((x) => x.id === m.id)) return prev;
+              if (incomingWhisperToMe) playLobbyWhisperChime();
               return [
                 ...prev,
                 {
@@ -1361,7 +1368,8 @@ export function LobbyClient() {
                   <p className="relative z-[1] border-b border-border px-2 py-1 text-[9px] leading-snug text-muted-foreground">
                     <span className="font-mono text-foreground">/w</span> then pick a name ·{" "}
                     <span className="font-mono text-foreground">/w Name message</span> ·{" "}
-                    <span className="font-mono text-foreground">Esc</span> wardrobe · WASD when chat unfocused
+                    <span className="font-mono text-foreground">Esc</span> wardrobe · whisper to you = short ping · WASD
+                    when chat unfocused
                   </p>
                   <ScrollArea
                     className="relative z-[1] h-[min(28vh,200px)] p-2"
@@ -1395,6 +1403,7 @@ export function LobbyClient() {
                           m.profileId !== me.id &&
                           m.profileId !== "system";
                         const isSys = m.profileId === "system";
+                        const isWhisper = Boolean(m.recipientProfileId);
                         if (isSys) {
                           return (
                             <div
@@ -1410,25 +1419,37 @@ export function LobbyClient() {
                             key={m.id}
                             className={cn(
                               "max-w-[92%] rounded-md border px-2.5 py-1.5",
-                              isMine
-                                ? "ml-auto border-border bg-muted/60 text-foreground"
-                                : "mr-auto border-border bg-card text-foreground"
+                              isWhisper
+                                ? isMine
+                                  ? "ml-auto border-purple-500/45 bg-purple-950/55 text-foreground shadow-[0_0_20px_rgba(168,85,247,0.12)]"
+                                  : "mr-auto border-purple-500/45 bg-purple-950/55 text-foreground shadow-[0_0_20px_rgba(168,85,247,0.12)]"
+                                : isMine
+                                  ? "ml-auto border-border bg-muted/60 text-foreground"
+                                  : "mr-auto border-border bg-card text-foreground"
                             )}
                           >
                             <div
                               className={cn(
                                 "mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground",
-                                isMine && "text-foreground/80"
+                                isMine && !isWhisper && "text-foreground/80",
+                                isWhisper && "text-purple-200/90"
                               )}
                             >
                               {m.nickname}
                               {m.recipientProfileId ? (
-                                <span className="ml-1 font-normal normal-case text-muted-foreground">
+                                <span className="ml-1 font-normal normal-case text-purple-300/80">
                                   {incoming ? "(whisper)" : "(to " + (m.recipientNickname ?? "?") + ")"}
                                 </span>
                               ) : null}
                             </div>
-                            <div className={incoming ? "text-foreground/90" : ""}>{m.body}</div>
+                            <div
+                              className={cn(
+                                incoming && !isWhisper && "text-foreground/90",
+                                isWhisper && "text-purple-50/95"
+                              )}
+                            >
+                              {m.body}
+                            </div>
                           </div>
                         );
                       })

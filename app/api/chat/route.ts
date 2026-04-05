@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/mock-mode";
 import { chatSendSchema } from "@/lib/validation";
 import { sanitizePublicText } from "@/lib/sanitize";
-import { maskProfanity, containsProfanity } from "@/lib/profanity";
 import { rateLimit } from "@/lib/rate-limit";
 import { LOBBY_ROOM_SLUG, MAX_CHAT_LEN } from "@/lib/constants";
 
@@ -42,10 +41,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  let text = sanitizePublicText(parsed.data.body, MAX_CHAT_LEN);
-  if (containsProfanity(text)) {
-    text = maskProfanity(text);
-  }
+  const text = sanitizePublicText(parsed.data.body, MAX_CHAT_LEN);
   if (!text) {
     return NextResponse.json({ error: "Empty message" }, { status: 400 });
   }
