@@ -157,15 +157,15 @@ export function LobbyEggZone(props: { online: number; visualPulse: boolean }) {
               </div>
               <EggAccentBurst generation={accentGeneration} active={visualPulse} />
               <motion.div
-                className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+                className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center pt-[14%]"
                 animate={digit}
                 style={{ transformOrigin: "50% 50%" }}
               >
                 <span
-                  className="text-[2.65rem] font-semibold tabular-nums tracking-tight text-fuchsia-50"
+                  className="text-[1.75rem] font-semibold tabular-nums tracking-tight text-fuchsia-50"
                   style={{
                     textShadow:
-                      "0 1px 2px rgba(0,0,0,0.65), 0 0 18px rgba(168,85,247,0.35)",
+                      "0 1px 2px rgba(0,0,0,0.65), 0 0 14px rgba(168,85,247,0.32)",
                   }}
                 >
                   {online}
