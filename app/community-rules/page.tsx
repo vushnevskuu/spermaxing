@@ -24,7 +24,8 @@ export default function CommunityRulesPage() {
             <li>Moderators may restrict access without warning for violations.</li>
           </ul>
           <p className="text-xs">
-            18+. For entertainment only. Do not use the game as a source of health advice.
+            Beta software — for entertainment and community chat only. Do not use the game as a source of
+            medical or health advice.
           </p>
         </CardContent>
       </Card>

@@ -52,6 +52,7 @@ delete from public.presence_rooms where room_slug = 'main';
 3. **Environment Variables** (и для Production, и для Preview):
    - `NEXT_PUBLIC_SUPABASE_URL` = URL проекта Supabase
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = anon key
+   - `NEXT_PUBLIC_SITE_URL` = канонический URL прод-сайта (например `https://твой-проект.vercel.app`) — для `metadataBase`, Open Graph, `sitemap.xml` и `robots.txt`.
 4. **Deploy**.
 5. Если редирект в Supabase ещё не совпадал с выданным доменом — обнови **Site URL** и **Redirect URLs** (шаг 2) и сохрани.
 

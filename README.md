@@ -1,6 +1,6 @@
 # OVUM RUSH
 
-Neon meme arcade: lobby chat, top-zone matchmaking, micro-races, and a player card. **18+** entertainment only — not medical.
+Neon meme arcade: lobby chat, top-zone matchmaking, micro-races, and a player card. **Beta** entertainment — not medical advice.
 
 ## Stack
 
