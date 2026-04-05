@@ -86,13 +86,10 @@ function laneCenterX(lane: number, W: number): number {
   return (lane + 0.5) * (W / LANES);
 }
 
-function layoutFromViewport(rw: number, rh: number) {
-  if (rw <= 0 || rh <= 0) return { W: 360, H: 640, PLAYER_Y: 640 * 0.78 };
-  const land = rw >= rh * 1.02;
-  const W = land ? 640 : 360;
-  const H = land ? 360 : 640;
-  return { W, H, PLAYER_Y: H * 0.78 };
-}
+/** Вертикальный раннер: логика и отрисовка всегда 360×640 (портрет), даже если окно в ландшафте — иначе полоска получается низкой. */
+const TRACK_W = 360;
+const TRACK_H = 640;
+const TRACK_PLAYER_Y = TRACK_H * 0.78;
 
 export type VerticalRushClientProps = {
   /** `embed` = opened from lobby (egg zone); no “rush” framing, Esc/Close returns. */
@@ -104,12 +101,10 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   const router = useRouter();
   const embed = variant === "embed";
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const viewportShellRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const playerSlotRef = useRef<HTMLDivElement>(null);
-  /** Логические W×H трека: портрет 360×640 или ландшафт 640×360 от ориентации окна. */
-  const layoutRef = useRef(layoutFromViewport(360, 640));
-  /** Синхрон с layoutRef для JSX — иначе при каждом setHud React затирает aspectRatio обратно на 360/640. */
-  const [trackSize, setTrackSize] = useState(() => ({ W: 360, H: 640 }));
+  const layoutRef = useRef({ W: TRACK_W, H: TRACK_H, PLAYER_Y: TRACK_PLAYER_Y });
   const [profile, setProfile] = useState<StoredProfile | null>(null);
   const [phase, setPhase] = useState<"loading" | "countdown" | "ready" | "play" | "dead">("loading");
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -762,33 +757,43 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   }, [phase]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  /* Логический трек 360×640 или 640×360 от ориентации окна + размер canvas под вьюпорт. */
+  /* Вписать канвас в доступную высоту (contain): flex-1 + размеры из shell, не только ширина. */
   useLayoutEffect(() => {
     if (phase !== "play" && phase !== "dead") return;
+    const shell = viewportShellRef.current;
     const wrap = viewportRef.current;
     const canvas = canvasRef.current;
-    if (!wrap || !canvas) return;
+    if (!shell || !wrap || !canvas) return;
 
     const sync = () => {
-      const L = layoutFromViewport(window.innerWidth, window.innerHeight);
-      layoutRef.current = L;
-      setTrackSize((prev) => (prev.W === L.W && prev.H === L.H ? prev : { W: L.W, H: L.H }));
-      wrap.style.aspectRatio = `${L.W} / ${L.H}`;
-      const r = wrap.getBoundingClientRect();
-      const cw = Math.max(1, Math.round(r.width));
-      const ch = Math.max(1, Math.round(r.height));
-      canvas.style.width = `${cw}px`;
-      canvas.style.height = `${ch}px`;
+      const L = layoutRef.current;
+      const sr = shell.getBoundingClientRect();
+      const availW = Math.max(1, sr.width);
+      const availH = Math.max(1, sr.height);
+      const ar = L.W / L.H;
+      let boxW = availW;
+      let boxH = boxW / ar;
+      if (boxH > availH) {
+        boxH = availH;
+        boxW = boxH * ar;
+      }
+      const bw = Math.max(1, Math.floor(boxW));
+      const bh = Math.max(1, Math.floor(boxH));
+      wrap.style.width = `${bw}px`;
+      wrap.style.height = `${bh}px`;
+      canvas.style.width = `${bw}px`;
+      canvas.style.height = `${bh}px`;
     };
 
     sync();
     window.addEventListener("resize", sync);
     const ro = new ResizeObserver(sync);
-    ro.observe(wrap);
+    ro.observe(shell);
     return () => {
       window.removeEventListener("resize", sync);
       ro.disconnect();
-      wrap.style.aspectRatio = "";
+      wrap.style.width = "";
+      wrap.style.height = "";
       canvas.style.width = "";
       canvas.style.height = "";
     };
@@ -829,7 +834,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       {!embed ? (
         <p className="text-center text-[11px] leading-snug text-muted-foreground">
           Pulse always drains (that is your speed) — buffs refill it and raise the cap. Pickups read by silhouette + glow
-          (cool = buff, warm = junk, grey/red = walls). Rotate for landscape. Rose rivals and purple eggs are hazards.
+          (cool = buff, warm = junk, grey/red = walls). Rose rivals and purple eggs are hazards.
           Zinc greys you (×5); Citrus comet 2s. Parody only — not medical advice.
         </p>
       ) : null}
@@ -868,8 +873,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
             <p className="text-foreground/70">
               Pulse (HUD) drains constantly and sets how fast you climb — only head picks up buffs/junk. Rose swimmers,
               wide purple eggs, and grey walls hit the body; shields may absorb. Items have no labels on the track — read
-              the shape. Candy / soda / sugar swell the eyes; buff pickups shrink them back. Landscape: rotate the
-              device. Parody only, not medical advice.
+              the shape. Candy / soda / sugar swell the eyes; buff pickups shrink them back. Parody only, not medical
+              advice.
             </p>
             <div>
               <p className="mb-1 font-medium text-cyan-300/90">Buffs — cool glow + icon</p>
@@ -909,17 +914,19 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       ) : null}
 
       {(phase === "play" || phase === "dead") && (
-        <div className="relative mx-auto w-full max-w-[min(100%,min(92vw,720px))] shrink-0 rounded-xl border border-purple-500/30 bg-black/80 p-2 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
+        <div
+          className={`relative mx-auto flex w-full min-h-0 flex-col rounded-xl border border-purple-500/30 bg-black/80 shadow-[0_0_40px_rgba(168,85,247,0.15)] ${
+            embed ? "flex-1 max-w-none" : "max-w-[min(100%,min(92vw,720px))] flex-1"
+          }`}
+        >
           <div
-            ref={viewportRef}
-            className="relative mx-auto w-full min-h-0 min-w-0 shrink-0 overflow-hidden rounded-lg"
-            style={{ aspectRatio: `${trackSize.W} / ${trackSize.H}` }}
+            ref={viewportShellRef}
+            className={`flex w-full min-h-0 items-center justify-center p-2 ${embed ? "flex-1" : "min-h-[min(52dvh,480px)] flex-1"}`}
           >
+            <div ref={viewportRef} className="relative shrink-0 overflow-hidden rounded-lg">
             <canvas
               ref={canvasRef}
-              width={trackSize.W}
-              height={trackSize.H}
-              className="absolute left-0 top-0 z-0 block h-full max-h-full w-full max-w-full touch-manipulation"
+              className="absolute left-0 top-0 z-0 block touch-manipulation"
               style={{
                 imageRendering: "pixelated",
               }}
@@ -936,8 +943,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
                 ref={playerSlotRef}
                 className="pointer-events-none absolute z-[2]"
                 style={{
-                  left: `${(laneCenterX(1, trackSize.W) / trackSize.W) * 100}%`,
-                  top: `${((trackSize.H * 0.78) / trackSize.H) * 100}%`,
+                  left: `${(laneCenterX(1, TRACK_W) / TRACK_W) * 100}%`,
+                  top: `${(TRACK_PLAYER_Y / TRACK_H) * 100}%`,
                   width: 0,
                   height: 0,
                 }}
@@ -964,9 +971,10 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
                 </div>
               </div>
             ) : null}
+            </div>
           </div>
           {phase === "play" ? (
-            <div className="mt-2 grid grid-cols-3 gap-1 text-center font-mono text-[10px] text-muted-foreground">
+            <div className="grid shrink-0 grid-cols-3 gap-1 px-2 pb-2 pt-1 text-center font-mono text-[10px] text-muted-foreground">
               <span>{hud.m} m</span>
               <span>
                 Pulse {hud.pace}/{hud.paceMax}
@@ -975,7 +983,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
             </div>
           ) : null}
           {hud.toast ? (
-            <p className="mt-1 text-center text-[11px] font-medium text-amber-200/90">{hud.toast}</p>
+            <p className="shrink-0 px-2 pb-2 text-center text-[11px] font-medium text-amber-200/90">{hud.toast}</p>
           ) : null}
         </div>
       )}
