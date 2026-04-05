@@ -7,31 +7,6 @@ export type GoodId = "zinc" | "omega" | "garlic" | "onion_ring" | "citrus";
 export type BadId = "chips" | "candy" | "soda" | "fried_ring" | "sugar_cube";
 export type ObstacleId = "laptop" | "shower" | "belt" | "stress" | "dry_wind";
 
-/** Короткий тег на canvas под иконкой (читаемость с дистанции). */
-export const GOOD_TRACK_TAGS: Record<GoodId, string> = {
-  zinc: "ZN",
-  omega: "O3",
-  garlic: "GL",
-  onion_ring: "ON",
-  citrus: "CT",
-};
-
-export const BAD_TRACK_TAGS: Record<BadId, string> = {
-  chips: "CH",
-  candy: "CN",
-  soda: "SD",
-  fried_ring: "FR",
-  sugar_cube: "SG",
-};
-
-export const OBSTACLE_TRACK_TAGS: Record<ObstacleId, string> = {
-  laptop: "PC",
-  shower: "SH",
-  belt: "BT",
-  stress: "XX",
-  dry_wind: "WND",
-};
-
 export const GOOD_ITEMS: {
   id: GoodId;
   label: string;

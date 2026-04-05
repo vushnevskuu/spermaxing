@@ -14,14 +14,12 @@ import {
   drawPickupOrObstacle,
   drawPlayerGroundGlow,
   drawProjectile,
+  drawRivalEgg,
   drawRivalSwimmer,
   drawVerticalRushBackground,
 } from "@/lib/vertical-rush-render";
 
-const W = 360;
-const H = 640;
 const LANES = 3;
-const PLAYER_Y = H * 0.78;
 /** World units along track per pixel of vertical screen offset (see screenY formula). */
 const TRACK_SCALE = 0.92;
 /** Pickups align with SwimmerAvatar head above body center (px). */
@@ -39,6 +37,7 @@ const PACE_START = 100;
 const PACE_DECAY_PER_SEC = 3.1;
 const PACE_DEATH_BELOW = 0.75;
 const RIVAL_PACE_HIT = 12;
+const EGG_PACE_HIT = 17;
 const STRIDE_MULT_MIN = 0.48;
 const STRIDE_MULT_MAX = 1.95;
 const MAX_SWEET_STACK = 12;
@@ -69,7 +68,8 @@ type Ent =
   | { at: number; lane: number; kind: "good"; id: GoodId; consumed: boolean }
   | { at: number; lane: number; kind: "bad"; id: BadId; consumed: boolean }
   | { at: number; lane: number; kind: "obs"; id: ObstacleId; consumed: boolean }
-  | { at: number; lane: number; kind: "rival"; consumed: boolean; wobbleSeed: number; baseLane: number };
+  | { at: number; lane: number; kind: "rival"; consumed: boolean; wobbleSeed: number; baseLane: number }
+  | { at: number; lane: number; kind: "egg"; laneSpan: 1 | 2; consumed: boolean };
 
 type Proj = { pos: number; lane: number };
 
@@ -82,8 +82,16 @@ function mulberry32(a: number) {
   };
 }
 
-function laneCenterX(lane: number): number {
+function laneCenterX(lane: number, W: number): number {
   return (lane + 0.5) * (W / LANES);
+}
+
+function layoutFromViewport(rw: number, rh: number) {
+  if (rw <= 0 || rh <= 0) return { W: 360, H: 640, PLAYER_Y: 640 * 0.78 };
+  const land = rw >= rh * 1.02;
+  const W = land ? 640 : 360;
+  const H = land ? 360 : 640;
+  return { W, H, PLAYER_Y: H * 0.78 };
 }
 
 export type VerticalRushClientProps = {
@@ -98,6 +106,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const playerSlotRef = useRef<HTMLDivElement>(null);
+  /** Логические W×H трека: портрет 360×640 или ландшафт 640×360 от ориентации окна. */
+  const layoutRef = useRef(layoutFromViewport(360, 640));
   const [profile, setProfile] = useState<StoredProfile | null>(null);
   const [phase, setPhase] = useState<"loading" | "countdown" | "ready" | "play" | "dead">("loading");
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -315,7 +325,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     const lane = Math.floor(g.rand() * LANES);
     const roll = g.rand();
     const at = g.scroll + 520 + g.rand() * 180;
-    if (roll < 0.13) {
+    if (roll < 0.08) {
       const baseLane = g.rand() * (LANES - 1);
       g.entities.push({
         at: g.scroll + 380 + g.rand() * 220,
@@ -325,7 +335,18 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         consumed: false,
         wobbleSeed: g.rand() * 12.56,
       });
-    } else if (roll < 0.39) {
+    } else if (roll < 0.19) {
+      const laneSpan = g.rand() < 0.48 ? 1 : 2;
+      const maxLane = LANES - laneSpan;
+      const lane0 = Math.floor(g.rand() * (maxLane + 1));
+      g.entities.push({
+        at,
+        lane: lane0,
+        laneSpan: laneSpan as 1 | 2,
+        kind: "egg",
+        consumed: false,
+      });
+    } else if (roll < 0.44) {
       g.entities.push({
         at,
         lane,
@@ -333,7 +354,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         id: pickGoodSpawnId(g),
         consumed: false,
       });
-    } else if (roll < 0.65) {
+    } else if (roll < 0.69) {
       g.entities.push({
         at,
         lane,
@@ -432,8 +453,9 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       ctx = c2d;
       boundCanvas = canvas;
       const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
-      canvas.width = W * dpr;
-      canvas.height = H * dpr;
+      const L0 = layoutRef.current;
+      canvas.width = Math.round(L0.W * dpr);
+      canvas.height = Math.round(L0.H * dpr);
       c2d.setTransform(dpr, 0, 0, dpr, 0, 0);
       return true;
     };
@@ -478,6 +500,16 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         gameRaf = requestAnimationFrame(loop);
         return;
       }
+      const L = layoutRef.current;
+      const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
+      const bw = Math.round(L.W * dpr);
+      const bh = Math.round(L.H * dpr);
+      if (el.width !== bw || el.height !== bh) {
+        el.width = bw;
+        el.height = bh;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
       const g = game.current;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -514,8 +546,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
       g.entities = g.entities.filter((e) => e.at > g.scroll - 200);
 
-      const px = laneCenterX(g.laneF);
-      const py = PLAYER_Y;
+      const px = laneCenterX(g.laneF, L.W);
+      const py = L.PLAYER_Y;
 
       for (const e of g.entities) {
         if (e.consumed) continue;
@@ -531,6 +563,21 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           } else if (!tryAbsorbBump(g)) {
             g.pace = Math.max(0, g.pace - RIVAL_PACE_HIT);
             pushToast(g, `Rival bump! −${RIVAL_PACE_HIT} pulse`);
+          }
+          continue;
+        }
+
+        if (e.kind === "egg") {
+          if (Math.abs(e.at - g.scroll) > COLL_BODY) continue;
+          const lo = e.lane - LANE_BODY;
+          const hi = e.lane + e.laneSpan - 1 + LANE_BODY;
+          if (g.laneF < lo || g.laneF > hi) continue;
+          e.consumed = true;
+          if (citrusFrenzy) {
+            /* комета проходит сквозь */
+          } else if (!tryAbsorbBump(g)) {
+            g.pace = Math.max(0, g.pace - EGG_PACE_HIT);
+            pushToast(g, `Egg barrier! −${EGG_PACE_HIT} pulse`);
           }
           continue;
         }
@@ -565,11 +612,22 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         p.pos += 520 * dt;
         for (const e of g.entities) {
           if (e.consumed) continue;
-          if (e.kind !== "obs" && e.kind !== "rival") continue;
-          if (Math.abs(e.lane - p.lane) > 0.35) continue;
+          if (e.kind !== "obs" && e.kind !== "rival" && e.kind !== "egg") continue;
+          let laneHit = false;
+          if (e.kind === "egg") {
+            const lo = e.lane - 0.35;
+            const hi = e.lane + e.laneSpan - 1 + 0.35;
+            laneHit = p.lane >= lo && p.lane <= hi;
+          } else {
+            laneHit = Math.abs(e.lane - p.lane) <= 0.35;
+          }
+          if (!laneHit) continue;
           if (p.pos >= e.at - 20 && p.pos <= e.at + 40) {
             e.consumed = true;
-            pushToast(g, e.kind === "rival" ? "Rival zapped!" : "Obstacle cleared!");
+            pushToast(
+              g,
+              e.kind === "rival" ? "Rival zapped!" : e.kind === "egg" ? "Egg cracked!" : "Obstacle cleared!"
+            );
             return false;
           }
         }
@@ -629,23 +687,28 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         });
       }
 
-      drawVerticalRushBackground(ctx, W, H, g.scroll, now);
+      drawVerticalRushBackground(ctx, L.W, L.H, g.scroll, now);
 
       for (const e of g.entities) {
         if (e.consumed) continue;
-        const screenY = PLAYER_Y - (e.at - g.scroll) * TRACK_SCALE;
-        if (screenY < -48 || screenY > H + 48) continue;
-        const cx = laneCenterX(e.lane);
+        const screenY = L.PLAYER_Y - (e.at - g.scroll) * TRACK_SCALE;
+        if (screenY < -48 || screenY > L.H + 48) continue;
         if (e.kind === "rival") {
-          drawRivalSwimmer(ctx, cx, screenY, now);
+          drawRivalSwimmer(ctx, laneCenterX(e.lane, L.W), screenY, now);
+        } else if (e.kind === "egg") {
+          const cx0 = laneCenterX(e.lane, L.W);
+          const cx1 = laneCenterX(e.lane + e.laneSpan - 1, L.W);
+          const cxe = (cx0 + cx1) / 2;
+          const block = (L.W / LANES) * e.laneSpan;
+          drawRivalEgg(ctx, cxe, screenY, now, e.laneSpan, block);
         } else {
-          drawPickupOrObstacle(ctx, e.kind, e.id, cx, screenY, now);
+          drawPickupOrObstacle(ctx, e.kind, e.id, laneCenterX(e.lane, L.W), screenY, now);
         }
       }
 
       for (const p of g.projectiles) {
-        const screenY = PLAYER_Y - (p.pos - g.scroll) * TRACK_SCALE;
-        const cx = laneCenterX(p.lane);
+        const screenY = L.PLAYER_Y - (p.pos - g.scroll) * TRACK_SCALE;
+        const cx = laneCenterX(p.lane, L.W);
         drawProjectile(ctx, cx, screenY, now);
       }
 
@@ -656,8 +719,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       }
       const slot = playerSlotRef.current;
       if (slot) {
-        slot.style.left = `${(laneCenterX(g.laneF) / W) * 100}%`;
-        slot.style.top = `${(PLAYER_Y / H) * 100}%`;
+        slot.style.left = `${(laneCenterX(g.laneF, L.W) / L.W) * 100}%`;
+        slot.style.top = `${(L.PLAYER_Y / L.H) * 100}%`;
       }
 
       gameRaf = requestAnimationFrame(loop);
@@ -697,7 +760,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   }, [phase]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  /* Explicit canvas CSS px from layout box: avoids WebKit/flex cases where bitmap draws but compositor shows empty. */
+  /* Логический трек 360×640 или 640×360 от ориентации окна + размер canvas под вьюпорт. */
   useLayoutEffect(() => {
     if (phase !== "play" && phase !== "dead") return;
     const wrap = viewportRef.current;
@@ -705,6 +768,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     if (!wrap || !canvas) return;
 
     const sync = () => {
+      layoutRef.current = layoutFromViewport(window.innerWidth, window.innerHeight);
+      wrap.style.aspectRatio = `${layoutRef.current.W} / ${layoutRef.current.H}`;
       const r = wrap.getBoundingClientRect();
       const cw = Math.max(1, Math.round(r.width));
       const ch = Math.max(1, Math.round(r.height));
@@ -713,10 +778,13 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     };
 
     sync();
+    window.addEventListener("resize", sync);
     const ro = new ResizeObserver(sync);
     ro.observe(wrap);
     return () => {
+      window.removeEventListener("resize", sync);
       ro.disconnect();
+      wrap.style.aspectRatio = "";
       canvas.style.width = "";
       canvas.style.height = "";
     };
@@ -756,9 +824,9 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
       {!embed ? (
         <p className="text-center text-[11px] leading-snug text-muted-foreground">
-          Pulse always drains (that is your speed) — buffs refill it and raise the cap. Buffs: cyan rounded frames +
-          tags; junk: pink tilted dashed squares; walls: red boxes. Zinc greys you (×5); Citrus comet 2s. Parody only —
-          not medical advice.
+          Pulse always drains (that is your speed) — buffs refill it and raise the cap. Pickups read by silhouette + glow
+          (cool = buff, warm = junk, grey/red = walls). Rotate for landscape. Rose rivals and purple eggs are hazards.
+          Zinc greys you (×5); Citrus comet 2s. Parody only — not medical advice.
         </p>
       ) : null}
 
@@ -794,13 +862,13 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           <div className="w-full max-w-sm space-y-3 rounded-lg border border-purple-500/25 bg-card/40 px-3 py-3 text-left text-[10px] leading-relaxed text-muted-foreground">
             <p className="font-semibold text-foreground/90">On the track</p>
             <p className="text-foreground/70">
-              Pulse (HUD) drains constantly and sets how fast you climb — only head picks up buffs/junk. Rivals and
-              walls eat pulse on hit unless a shield pops (Onion or Omega; random if both). Read pickups by frame shape +
-              tag under the art. Candy / soda / sugar swell the eyes; buff pickups shrink them back — parody
-              only, not medical advice.
+              Pulse (HUD) drains constantly and sets how fast you climb — only head picks up buffs/junk. Rose swimmers,
+              wide purple eggs, and grey walls hit the body; shields may absorb. Items have no labels on the track — read
+              the shape. Candy / soda / sugar swell the eyes; buff pickups shrink them back. Landscape: rotate the
+              device. Parody only, not medical advice.
             </p>
             <div>
-              <p className="mb-1 font-medium text-cyan-300/90">Buffs — cyan rounded frame</p>
+              <p className="mb-1 font-medium text-cyan-300/90">Buffs — cool glow + icon</p>
               <ul className="list-inside list-disc space-y-0.5">
                 {GOOD_ITEMS.map((it) => (
                   <li key={it.id}>
@@ -810,7 +878,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
               </ul>
             </div>
             <div>
-              <p className="mb-1 font-medium text-pink-300/90">Junk — pink dashed diamond</p>
+              <p className="mb-1 font-medium text-pink-300/90">Junk — warm glow + snack shapes</p>
               <ul className="list-inside list-disc space-y-0.5">
                 {BAD_ITEMS.map((it) => (
                   <li key={it.id}>
@@ -820,7 +888,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
               </ul>
             </div>
             <div>
-              <p className="mb-1 font-medium text-red-300/90">Obstacles — red hazard box = −pulse</p>
+              <p className="mb-1 font-medium text-red-300/90">Walls / eggs — body hit = −pulse (eggs like lobby ovum)</p>
               <ul className="list-inside list-disc space-y-0.5">
                 {OBSTACLES.map((it) => (
                   <li key={it.id}>
@@ -837,16 +905,16 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       ) : null}
 
       {(phase === "play" || phase === "dead") && (
-        <div className="relative mx-auto w-full max-w-[min(100%,360px)] shrink-0 rounded-xl border border-purple-500/30 bg-black/80 p-2 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
+        <div className="relative mx-auto w-full max-w-[min(100%,min(92vw,720px))] shrink-0 rounded-xl border border-purple-500/30 bg-black/80 p-2 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
           <div
             ref={viewportRef}
             className="relative mx-auto w-full min-h-0 min-w-0 shrink-0 overflow-hidden rounded-lg"
-            style={{ aspectRatio: `${W} / ${H}` }}
+            style={{ aspectRatio: "360 / 640" }}
           >
             <canvas
               ref={canvasRef}
-              width={W}
-              height={H}
+              width={360}
+              height={640}
               className="absolute left-0 top-0 z-0 block h-full max-h-full w-full max-w-full touch-manipulation"
               style={{
                 imageRendering: "pixelated",
@@ -864,8 +932,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
                 ref={playerSlotRef}
                 className="pointer-events-none absolute z-[2]"
                 style={{
-                  left: `${(laneCenterX(1) / W) * 100}%`,
-                  top: `${(PLAYER_Y / H) * 100}%`,
+                  left: `${(laneCenterX(1, 360) / 360) * 100}%`,
+                  top: `${((640 * 0.78) / 640) * 100}%`,
                   width: 0,
                   height: 0,
                 }}
@@ -933,8 +1001,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       {phase === "play" ? (
         <p className="text-center text-[10px] text-muted-foreground">
           {embed
-            ? "Tap left/right to strafe. Dodge grey rivals; head collects buffs/junk only."
-            : "Mobile: tap left/right half to strafe. Dodge grey rivals; head collects buffs/junk only."}
+            ? "Tap left/right to strafe. Dodge rose rivals & purple eggs; head collects buffs/junk only."
+            : "Mobile: tap left/right half to strafe. Dodge rose rivals & purple eggs; head collects buffs/junk only."}
         </p>
       ) : null}
     </div>

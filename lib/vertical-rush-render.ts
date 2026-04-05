@@ -1,19 +1,10 @@
 /**
- * Procedural OVUM-style climb art: neon tunnel, readable pickups (no external bitmaps).
+ * Procedural OVUM-style climb art: neon tunnel, silhouette pickups (no external bitmaps).
  * Иконки на треке — здесь (`drawPickupOrObstacle`). После подбора на персонаже — `SwimmerRushEquippedLayers` / `RushEquippedFlags`.
+ * Читаемость: силуэт + цветовая аура (без рамок и подписей на canvas).
  */
 
-import {
-  BAD_ITEMS,
-  BAD_TRACK_TAGS,
-  GOOD_ITEMS,
-  GOOD_TRACK_TAGS,
-  OBSTACLES,
-  OBSTACLE_TRACK_TAGS,
-  type BadId,
-  type GoodId,
-  type ObstacleId,
-} from "@/lib/vertical-rush-catalog";
+import { BAD_ITEMS, GOOD_ITEMS, OBSTACLES, type BadId, type GoodId, type ObstacleId } from "@/lib/vertical-rush-catalog";
 
 const TAU = Math.PI * 2;
 
@@ -60,99 +51,6 @@ function strokeRoundRect(
   ctx.lineTo(x, y + rr);
   ctx.quadraticCurveTo(x, y, x + rr, y);
   ctx.closePath();
-}
-
-function fillRoundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
-) {
-  strokeRoundRect(ctx, x, y, w, h, r);
-  ctx.fill();
-}
-
-/** Рамки разных форм: бафф / дебафф / стена — считываются мгновенно. */
-function drawPickupKindFrame(ctx: CanvasRenderingContext2D, cx: number, cy: number, kind: "good" | "bad" | "obs") {
-  if (kind === "good") {
-    ctx.strokeStyle = "rgba(34,211,238,0.95)";
-    ctx.lineWidth = 4;
-    ctx.shadowColor = "rgba(34,211,238,0.55)";
-    ctx.shadowBlur = 14;
-    strokeRoundRect(ctx, cx - 29, cy - 29, 58, 58, 14);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(165,243,252,0.5)";
-    ctx.lineWidth = 1.5;
-    strokeRoundRect(ctx, cx - 25, cy - 25, 50, 50, 11);
-    ctx.stroke();
-    return;
-  }
-  if (kind === "bad") {
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(Math.PI / 4);
-    ctx.strokeStyle = "rgba(244,114,182,0.95)";
-    ctx.lineWidth = 3.5;
-    ctx.setLineDash([6, 5]);
-    ctx.shadowColor = "rgba(236,72,153,0.45)";
-    ctx.shadowBlur = 12;
-    strokeRoundRect(ctx, -24, -24, 48, 48, 6);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.setLineDash([]);
-    ctx.strokeStyle = "rgba(251,113,133,0.55)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    strokeRoundRect(ctx, -20, -20, 40, 40, 4);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-    return;
-  }
-  ctx.strokeStyle = "rgba(248,113,113,0.95)";
-  ctx.lineWidth = 3.5;
-  ctx.shadowColor = "rgba(239,68,68,0.5)";
-  ctx.shadowBlur = 14;
-  strokeRoundRect(ctx, cx - 30, cy - 26, 60, 52, 5);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "rgba(254,202,202,0.12)";
-  fillRoundRect(ctx, cx - 27, cy - 23, 54, 46, 4);
-  ctx.strokeStyle = "rgba(254,202,202,0.55)";
-  ctx.lineWidth = 2;
-  strokeRoundRect(ctx, cx - 27, cy - 23, 54, 46, 4);
-  ctx.stroke();
-}
-
-/** Плашка с тегом под предметом. */
-function drawTrackTag(ctx: CanvasRenderingContext2D, cx: number, cy: number, tag: string, kind: "good" | "bad" | "obs") {
-  ctx.save();
-  ctx.font = "900 11px ui-sans-serif, system-ui, sans-serif";
-  const padX = 6;
-  const w = Math.max(26, ctx.measureText(tag).width + padX * 2);
-  const h = 16;
-  const x = cx - w / 2;
-  const y = cy + 22;
-  const bg =
-    kind === "good"
-      ? "rgba(8,145,178,0.92)"
-      : kind === "bad"
-        ? "rgba(190,24,93,0.92)"
-        : "rgba(185,28,28,0.9)";
-  ctx.fillStyle = bg;
-  fillRoundRect(ctx, x, y, w, h, 4);
-  ctx.strokeStyle = "rgba(255,255,255,0.45)";
-  ctx.lineWidth = 1;
-  strokeRoundRect(ctx, x, y, w, h, 4);
-  ctx.stroke();
-  ctx.fillStyle = "#f8fafc";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(tag, cx, y + h / 2);
-  ctx.restore();
 }
 
 /** OVUM climb tunnel: neon ovum-field, parallax grid, soft “flow” curves (cartoon, non-explicit). */
@@ -268,45 +166,83 @@ export function drawCitrusCometTrail(ctx: CanvasRenderingContext2D, px: number, 
 }
 
 /**
- * NPC swimmer swimming down-track (head toward player). Cartoon, non-explicit.
+ * Вражеский сперматозоид навстречу игроку: тот же силуэт, что у аватара (голова + жгутик),
+ * без глаз и без «шмоток», слегка розовый (cartoon, non-explicit).
  */
 export function drawRivalSwimmer(ctx: CanvasRenderingContext2D, cx: number, cy: number, nowMs: number) {
   const t = nowMs * 0.0035;
-  const wob = Math.sin(t * 1.1) * 1.8;
+  const wob = Math.sin(t * 1.1) * 1.6;
   ctx.save();
   ctx.translate(cx, cy + wob);
-  ctx.strokeStyle = "rgba(251, 113, 133, 0.55)";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4, 3]);
+  const headFill = "#fda4af";
+  const headStroke = "#f43f5e";
+  const tailFill = "#fecdd3";
+  const tailStroke = "#fb7185";
+  ctx.fillStyle = "rgba(244, 63, 94, 0.12)";
   ctx.beginPath();
-  ctx.arc(0, 0, 26, 0, TAU);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = "#94a3b8";
-  ctx.strokeStyle = "#64748b";
+  ctx.ellipse(0, 6, 22, 20, 0, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = tailFill;
+  ctx.strokeStyle = tailStroke;
   ctx.lineWidth = 2.2;
   ctx.beginPath();
-  ctx.ellipse(0, 9, 15, 12, 0, 0, TAU);
+  ctx.moveTo(2, -2);
+  ctx.quadraticCurveTo(-18 + Math.sin(t * 1.35) * 4, -22, -32 + Math.sin(t * 1.1) * 2, -14);
+  ctx.quadraticCurveTo(-20, 4, -2, 8);
+  ctx.quadraticCurveTo(4, 4, 2, -2);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "#e2e8f0";
+  ctx.fillStyle = headFill;
+  ctx.strokeStyle = headStroke;
+  ctx.lineWidth = 2.4;
   ctx.beginPath();
-  ctx.arc(-5, 6, 4, 0, TAU);
-  ctx.arc(6, 6, 4, 0, TAU);
+  ctx.ellipse(2, 10, 16, 13, Math.sin(t * 0.9) * 0.08, 0, TAU);
   ctx.fill();
-  ctx.fillStyle = "#0f172a";
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Яйцеклетка- hazard в стиле лобби (фуксия / пурпур, частицы), ширина от числа полос. */
+export function drawRivalEgg(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  nowMs: number,
+  laneSpan: 1 | 2,
+  laneBlockPx: number
+) {
+  const pulse = 1 + Math.sin(nowMs * 0.004) * 0.035;
+  const r = Math.min(laneBlockPx * 0.44, laneSpan === 2 ? 56 : 36) * pulse;
+  ctx.save();
+  ctx.translate(cx, cy);
+  const shell = ctx.createRadialGradient(-r * 0.2, -r * 0.25, 0, 0, 0, r * 1.05);
+  shell.addColorStop(0, "rgba(244,63,94,0.5)");
+  shell.addColorStop(0.38, "rgba(190,24,93,0.72)");
+  shell.addColorStop(0.55, "rgba(88,28,135,0.88)");
+  shell.addColorStop(1, "rgba(12,6,18,0.96)");
+  ctx.fillStyle = shell;
   ctx.beginPath();
-  ctx.arc(-4.5, 6.5, 1.6, 0, TAU);
-  ctx.arc(6.5, 6.5, 1.6, 0, TAU);
+  ctx.arc(0, 0, r, 0, TAU);
   ctx.fill();
-  ctx.fillStyle = "#cbd5e1";
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(192,132,252,0.45)";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  const n = 10;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU + nowMs * 0.0012 * (1 + (i % 3));
+    const pr = 1.2 + (i % 4) * 0.35;
+    const px = Math.cos(a) * r * (0.35 + (i % 5) * 0.08);
+    const py = Math.sin(a) * r * (0.32 + (i % 4) * 0.07);
+    ctx.fillStyle = "rgba(244,63,94,0.55)";
+    ctx.beginPath();
+    ctx.arc(px, py, pr, 0, TAU);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "rgba(250,204,21,0.2)";
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(0, -4);
-  ctx.quadraticCurveTo(22 + Math.sin(t * 1.4) * 3, -18, 28, -6);
-  ctx.quadraticCurveTo(14, 2, 0, -4);
-  ctx.fill();
+  ctx.arc(0, 0, r * 0.88, 0, TAU);
   ctx.stroke();
   ctx.restore();
 }
@@ -319,21 +255,21 @@ function drawGoodZinc(ctx: CanvasRenderingContext2D, x: number, y: number, t: nu
   ctx.rotate(Math.sin(t * 0.4) * 0.12);
   ctx.scale(s, s);
   ctx.strokeStyle = "#22d3ee";
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 3;
   ctx.lineCap = "round";
   for (let i = 0; i < 4; i++) {
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(0, -13);
+    ctx.lineTo(0, -16);
     ctx.stroke();
     ctx.rotate(Math.PI / 2);
   }
   ctx.fillStyle = "#ecfeff";
   ctx.beginPath();
-  ctx.arc(0, 0, 4, 0, TAU);
+  ctx.arc(0, 0, 5.2, 0, TAU);
   ctx.fill();
   ctx.strokeStyle = "#67e8f9";
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2;
   ctx.stroke();
   ctx.strokeStyle = "rgba(165,243,252,0.9)";
   ctx.lineWidth = 1.25;
@@ -786,11 +722,13 @@ export function drawPickupOrObstacle(
 ) {
   const t = nowMs * 0.003;
   const accent = catalogColor(kind, id);
-  drawItemAura(ctx, cx, cy, accent, kind === "obs" ? 34 : 30, kind === "good" ? 0.32 : kind === "bad" ? 0.28 : 0.24);
+  const auraR = kind === "good" ? 42 : kind === "bad" ? 38 : 44;
+  const auraA = kind === "good" ? 0.45 : kind === "bad" ? 0.4 : 0.28;
+  drawItemAura(ctx, cx, cy, accent, auraR, auraA);
 
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(1.14, 1.14);
+  ctx.scale(1.3, 1.3);
   ctx.translate(-cx, -cy);
 
   if (kind === "good") {
@@ -850,15 +788,6 @@ export function drawPickupOrObstacle(
   }
 
   ctx.restore();
-
-  drawPickupKindFrame(ctx, cx, cy, kind);
-  const tag =
-    kind === "good"
-      ? GOOD_TRACK_TAGS[id as GoodId]
-      : kind === "bad"
-        ? BAD_TRACK_TAGS[id as BadId]
-        : OBSTACLE_TRACK_TAGS[id as ObstacleId];
-  drawTrackTag(ctx, cx, cy, tag, kind);
 }
 
 export function drawProjectile(ctx: CanvasRenderingContext2D, cx: number, cy: number, nowMs: number) {
