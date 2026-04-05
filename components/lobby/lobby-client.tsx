@@ -48,7 +48,7 @@ import { ALL_TAIL_TYPES, type AvatarLoadout, type ColorTheme, type TailType, typ
 import { cosmeticsForSeed, parseFaceExtraId, parseHeadgearId, parseNeckWearId } from "@/lib/loadout-cosmetics";
 import { CHAT_RATE_MS, MAX_CHAT_LEN } from "@/lib/constants";
 import { sanitizePublicText } from "@/lib/sanitize";
-import { parseChatCommand } from "@/lib/chat-parse";
+import { parseChatCommand, parseWhisperAutocompleteState } from "@/lib/chat-parse";
 import { cn } from "@/lib/utils";
 import {
   applyEggCoreRepulsion,
@@ -407,6 +407,9 @@ export function LobbyClient() {
   const [chatHistoryError, setChatHistoryError] = useState<string | null>(null);
   const [chatBootToken, setChatBootToken] = useState(0);
   const [chatInput, setChatInput] = useState("");
+  const chatScrollViewportRef = useRef<HTMLDivElement>(null);
+  const chatScrollPrevLenRef = useRef(0);
+  const [whisperSuggestHi, setWhisperSuggestHi] = useState(0);
   const [whisperTo, setWhisperTo] = useState<{ id: string; nick: string } | null>(null);
   const chatFocusedRef = useRef(false);
   const [online, setOnline] = useState(1);
@@ -1152,6 +1155,57 @@ export function LobbyClient() {
     );
   }, [messages, me]);
 
+  function chatViewportNearBottom(el: HTMLDivElement) {
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  }
+
+  useLayoutEffect(() => {
+    if (chatCollapsed) return;
+    const el = chatScrollViewportRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [chatCollapsed]);
+
+  useLayoutEffect(() => {
+    if (chatCollapsed) return;
+    const el = chatScrollViewportRef.current;
+    if (!el) return;
+    const len = visibleMessages.length;
+    if (len > chatScrollPrevLenRef.current) {
+      if (chatScrollPrevLenRef.current === 0 || chatViewportNearBottom(el)) {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+    chatScrollPrevLenRef.current = len;
+  }, [visibleMessages, chatCollapsed]);
+
+  const whisperRecipients = useMemo(() => {
+    if (!me) return [];
+    return buildDisplaySwimmers(swimmers, me, mock, posRef).filter((s) => s.profileId !== me.id);
+  }, [swimmers, me, mock]);
+
+  const whisperSuggestState = useMemo(() => parseWhisperAutocompleteState(chatInput), [chatInput]);
+
+  const whisperSuggestions = useMemo(() => {
+    if (!whisperSuggestState || !me) return [];
+    const q = whisperSuggestState.query.toLowerCase();
+    const base = whisperRecipients;
+    if (!q) return base.slice(0, 8);
+    const low = (n: string) => n.toLowerCase();
+    const pref = base.filter((s) => low(s.nickname).startsWith(q));
+    const prefIds = new Set(pref.map((s) => s.profileId));
+    const rest = base.filter((s) => !prefIds.has(s.profileId) && low(s.nickname).includes(q));
+    return [...pref, ...rest].slice(0, 8);
+  }, [whisperSuggestState, whisperRecipients, me]);
+
+  useEffect(() => {
+    setWhisperSuggestHi(0);
+  }, [whisperSuggestions]);
+
+  const applyWhisperPick = useCallback((nickname: string) => {
+    setChatInput(`/w ${nickname} `);
+  }, []);
+
   if (!me) {
     return (
       <div className="flex min-h-dvh items-center justify-center text-muted-foreground">
@@ -1297,13 +1351,14 @@ export function LobbyClient() {
                     </div>
                   </div>
                   <p className="relative z-[1] border-b border-border px-2 py-1 text-[9px] leading-snug text-muted-foreground">
-                    <span className="font-mono text-foreground">/w Name</span> whisper · WASD / drag field when chat
-                    unfocused
+                    <span className="font-mono text-foreground">/w</span> then pick a name (list appears) ·{" "}
+                    <span className="font-mono text-foreground">/w Name message</span> · WASD when chat unfocused
                   </p>
                   <ScrollArea
                     className="relative z-[1] h-[min(28vh,200px)] p-2"
                     thumbClassName="rounded-full bg-neutral-600/60 hover:bg-neutral-500/70"
                     scrollbarClassName="w-1 border-l-0 p-px"
+                    viewportRef={chatScrollViewportRef}
                   >
                     <div className="flex flex-col gap-2 pr-1 font-sans text-[11px] leading-snug">
                       {!mock &&
@@ -1376,6 +1431,36 @@ export function LobbyClient() {
                   </ScrollArea>
                   <div className="relative z-[1] flex gap-1.5 border-t border-border p-2">
                     <div className="relative min-w-0 flex-1">
+                      {whisperSuggestState ? (
+                        <div
+                          className="absolute bottom-full left-0 right-0 z-20 mb-1 max-h-[min(40vh,220px)] overflow-auto rounded-md border border-border bg-card py-1 shadow-lg"
+                          role="listbox"
+                          aria-label="Whisper to player"
+                        >
+                          {whisperSuggestions.length === 0 ? (
+                            <p className="px-2 py-2 text-[10px] text-muted-foreground">
+                              No one in the lobby matches. Check spelling or wait for them to join.
+                            </p>
+                          ) : (
+                            whisperSuggestions.map((s, idx) => (
+                              <button
+                                key={s.profileId}
+                                type="button"
+                                role="option"
+                                aria-selected={idx === whisperSuggestHi}
+                                className={cn(
+                                  "flex min-h-11 w-full items-center px-2 py-2 text-left text-[11px] font-medium text-foreground md:min-h-9 md:py-1.5",
+                                  idx === whisperSuggestHi ? "bg-muted" : "hover:bg-muted/70"
+                                )}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => applyWhisperPick(s.nickname)}
+                              >
+                                {s.nickname}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
                       <Input
                         value={chatInput}
                         maxLength={MAX_CHAT_LEN}
@@ -1389,7 +1474,34 @@ export function LobbyClient() {
                         onBlur={() => {
                           chatFocusedRef.current = false;
                         }}
-                        onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                        onKeyDown={(e) => {
+                          const open = whisperSuggestState !== null;
+                          const list = whisperSuggestions;
+                          if (e.key === "ArrowDown" && open && list.length > 0) {
+                            e.preventDefault();
+                            setWhisperSuggestHi((i) => Math.min(i + 1, list.length - 1));
+                            return;
+                          }
+                          if (e.key === "ArrowUp" && open && list.length > 0) {
+                            e.preventDefault();
+                            setWhisperSuggestHi((i) => Math.max(i - 1, 0));
+                            return;
+                          }
+                          if (e.key === "Escape" && open) {
+                            e.preventDefault();
+                            setChatInput("");
+                            return;
+                          }
+                          if (e.key === "Enter") {
+                            if (open && list.length > 0) {
+                              e.preventDefault();
+                              const pick = list[Math.min(whisperSuggestHi, list.length - 1)];
+                              if (pick) applyWhisperPick(pick.nickname);
+                              return;
+                            }
+                            void sendChat();
+                          }
+                        }}
                         className="h-11 w-full pr-9 text-base md:h-8 md:text-[11px]"
                       />
                       <Sparkles

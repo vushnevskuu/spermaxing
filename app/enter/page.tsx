@@ -132,11 +132,12 @@ export default function EnterPage() {
         <CardHeader>
           <CardTitle className="font-black">Pick a nickname</CardTitle>
           <CardDescription>
-            Your nickname belongs to your <strong className="font-medium text-foreground">account</strong> (anonymous
-            session in this browser): <strong className="font-medium text-foreground">one player, one public name</strong>
-            . After you enter, Wardrobe only changes your look — not this name. We pre-fill your last nickname from this
-            device. If you clear site data or use another browser, you get a new account; the old name stays on the old
-            one until we add optional sign-in (email) for recovery.
+            Use <strong className="font-medium text-foreground">Latin letters only</strong> (A–Z, numbers, space, dot,
+            hyphen — no Cyrillic). Your nickname belongs to your{" "}
+            <strong className="font-medium text-foreground">account</strong> (anonymous session in this browser):{" "}
+            <strong className="font-medium text-foreground">one player, one public name</strong>. After you enter,
+            Wardrobe only changes your look — not this name. We pre-fill your last nickname from this device. If you had
+            an old non-Latin name, open Wardrobe once to switch to Latin.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -151,7 +152,7 @@ export default function EnterPage() {
                 id="nick"
                 value={nick}
                 onChange={(e) => setNick(e.target.value)}
-                placeholder="e.g. TurboSquish"
+                placeholder="Latin only, e.g. TurboSquish"
                 autoComplete="username"
                 maxLength={20}
                 className="mt-1 font-semibold"

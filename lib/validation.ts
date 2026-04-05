@@ -1,12 +1,20 @@
 import { z } from "zod";
 import { ALL_TAIL_TYPES, type TailType } from "@/types";
 import { FACE_EXTRA_IDS, HEADGEAR_IDS, NECK_WEAR_IDS } from "@/lib/loadout-cosmetics";
+import {
+  LOBBY_NICKNAME_MAX,
+  LOBBY_NICKNAME_MIN,
+  LOBBY_NICKNAME_PATTERN,
+} from "@/lib/nickname-policy";
 
 export const nicknameSchema = z
   .string()
-  .min(2, "At least 2 characters")
-  .max(20, "Max 20 characters")
-  .regex(/^[\wА-Яа-яЁё.\- ]+$/, "Letters, numbers, space, dot, hyphen only");
+  .min(LOBBY_NICKNAME_MIN, "At least 2 characters")
+  .max(LOBBY_NICKNAME_MAX, "Max 20 characters")
+  .regex(
+    LOBBY_NICKNAME_PATTERN,
+    "Latin letters, numbers, space, dot, or hyphen only (no Cyrillic)."
+  );
 
 const headgearSchema = z.enum(HEADGEAR_IDS);
 const faceExtraSchema = z.enum(FACE_EXTRA_IDS);

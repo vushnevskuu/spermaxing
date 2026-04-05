@@ -8,18 +8,28 @@ type ScrollAreaProps = React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive
   /** Tailwind classes for the vertical scrollbar thumb (e.g. cyan tint). */
   thumbClassName?: string;
   scrollbarClassName?: string;
+  /** Ref to the scrollable viewport (for programmatic scroll-to-bottom). */
+  viewportRef?: React.Ref<HTMLDivElement>;
+  viewportClassName?: string;
 };
 
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   ScrollAreaProps
->(({ className, children, thumbClassName, scrollbarClassName, ...props }, ref) => (
+>(
+  (
+    { className, children, thumbClassName, scrollbarClassName, viewportRef, viewportClassName, ...props },
+    ref
+  ) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
     className={cn("relative overflow-hidden", className)}
     {...props}
   >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+    <ScrollAreaPrimitive.Viewport
+      ref={viewportRef}
+      className={cn("h-full w-full rounded-[inherit]", viewportClassName)}
+    >
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollAreaPrimitive.ScrollAreaScrollbar
@@ -35,7 +45,8 @@ const ScrollArea = React.forwardRef<
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
     <ScrollAreaPrimitive.Corner />
   </ScrollAreaPrimitive.Root>
-));
+  )
+);
 ScrollArea.displayName = ScrollAreaPrimitive.Root.displayName;
 
 const ScrollBar = React.forwardRef<
