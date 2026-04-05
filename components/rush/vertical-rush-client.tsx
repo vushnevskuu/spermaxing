@@ -108,6 +108,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   const playerSlotRef = useRef<HTMLDivElement>(null);
   /** Логические W×H трека: портрет 360×640 или ландшафт 640×360 от ориентации окна. */
   const layoutRef = useRef(layoutFromViewport(360, 640));
+  /** Синхрон с layoutRef для JSX — иначе при каждом setHud React затирает aspectRatio обратно на 360/640. */
+  const [trackSize, setTrackSize] = useState(() => ({ W: 360, H: 640 }));
   const [profile, setProfile] = useState<StoredProfile | null>(null);
   const [phase, setPhase] = useState<"loading" | "countdown" | "ready" | "play" | "dead">("loading");
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -768,8 +770,10 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     if (!wrap || !canvas) return;
 
     const sync = () => {
-      layoutRef.current = layoutFromViewport(window.innerWidth, window.innerHeight);
-      wrap.style.aspectRatio = `${layoutRef.current.W} / ${layoutRef.current.H}`;
+      const L = layoutFromViewport(window.innerWidth, window.innerHeight);
+      layoutRef.current = L;
+      setTrackSize((prev) => (prev.W === L.W && prev.H === L.H ? prev : { W: L.W, H: L.H }));
+      wrap.style.aspectRatio = `${L.W} / ${L.H}`;
       const r = wrap.getBoundingClientRect();
       const cw = Math.max(1, Math.round(r.width));
       const ch = Math.max(1, Math.round(r.height));
@@ -792,8 +796,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
   return (
     <div
-      className={`relative mx-auto flex w-full max-w-lg min-w-0 flex-col gap-2 px-safe py-3 pb-safe pt-safe ${
-        embed ? "min-h-[100dvh] flex-1" : "min-h-dvh"
+      className={`relative mx-auto flex w-full min-w-0 flex-col gap-2 px-safe py-3 pb-safe pt-safe ${
+        embed ? "max-w-none min-h-0 w-full flex-1" : "max-w-lg min-h-dvh"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -909,12 +913,12 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
           <div
             ref={viewportRef}
             className="relative mx-auto w-full min-h-0 min-w-0 shrink-0 overflow-hidden rounded-lg"
-            style={{ aspectRatio: "360 / 640" }}
+            style={{ aspectRatio: `${trackSize.W} / ${trackSize.H}` }}
           >
             <canvas
               ref={canvasRef}
-              width={360}
-              height={640}
+              width={trackSize.W}
+              height={trackSize.H}
               className="absolute left-0 top-0 z-0 block h-full max-h-full w-full max-w-full touch-manipulation"
               style={{
                 imageRendering: "pixelated",
@@ -932,8 +936,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
                 ref={playerSlotRef}
                 className="pointer-events-none absolute z-[2]"
                 style={{
-                  left: `${(laneCenterX(1, 360) / 360) * 100}%`,
-                  top: `${((640 * 0.78) / 640) * 100}%`,
+                  left: `${(laneCenterX(1, trackSize.W) / trackSize.W) * 100}%`,
+                  top: `${((trackSize.H * 0.78) / trackSize.H) * 100}%`,
                   width: 0,
                   height: 0,
                 }}
