@@ -56,6 +56,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   const router = useRouter();
   const embed = variant === "embed";
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<"loading" | "countdown" | "ready" | "play" | "dead">("loading");
   const [countdown, setCountdown] = useState<number | null>(null);
   const [hud, setHud] = useState({
@@ -465,9 +466,34 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   }, [phase]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
+  /* Explicit canvas CSS px from layout box: avoids WebKit/flex cases where bitmap draws but compositor shows empty. */
+  useLayoutEffect(() => {
+    if (phase !== "play" && phase !== "dead") return;
+    const wrap = viewportRef.current;
+    const canvas = canvasRef.current;
+    if (!wrap || !canvas) return;
+
+    const sync = () => {
+      const r = wrap.getBoundingClientRect();
+      const cw = Math.max(1, Math.round(r.width));
+      const ch = Math.max(1, Math.round(r.height));
+      canvas.style.width = `${cw}px`;
+      canvas.style.height = `${ch}px`;
+    };
+
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(wrap);
+    return () => {
+      ro.disconnect();
+      canvas.style.width = "";
+      canvas.style.height = "";
+    };
+  }, [phase]);
+
   return (
     <div
-      className={`relative mx-auto flex w-full max-w-lg flex-col gap-2 px-safe py-3 pb-safe pt-safe ${
+      className={`relative mx-auto flex w-full max-w-lg min-w-0 flex-col gap-2 px-safe py-3 pb-safe pt-safe ${
         embed ? "min-h-[100dvh] flex-1" : "min-h-dvh"
       }`}
     >
@@ -574,20 +600,19 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       ) : null}
 
       {(phase === "play" || phase === "dead") && (
-        <div className="relative mx-auto w-full max-w-[min(100%,360px)] rounded-xl border border-purple-500/30 bg-black/80 p-2 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
-          {/* Padding-bottom aspect: reliable sizing on desktop flex layouts. */}
+        <div className="relative mx-auto w-full max-w-[min(100%,360px)] shrink-0 rounded-xl border border-purple-500/30 bg-black/80 p-2 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
           <div
-            className="relative mx-auto w-full overflow-hidden rounded-lg"
-            style={{ height: 0, paddingBottom: `${(H / W) * 100}%` }}
+            ref={viewportRef}
+            className="relative mx-auto w-full min-h-0 min-w-0 shrink-0 overflow-hidden rounded-lg"
+            style={{ aspectRatio: `${W} / ${H}` }}
           >
             <canvas
               ref={canvasRef}
               width={W}
               height={H}
-              className="absolute left-0 top-0 block h-full w-full touch-manipulation"
+              className="absolute left-0 top-0 block h-full max-h-full w-full max-w-full touch-manipulation"
               style={{
                 imageRendering: "pixelated",
-                transform: "translateZ(0)",
               }}
               onPointerDown={(e) => {
                 if (phase !== "play") return;
