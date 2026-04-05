@@ -43,6 +43,15 @@ export function saveLocalProfile(data: StoredProfile) {
   localStorage.setItem(KEY, JSON.stringify(data));
 }
 
+/** Keep wardrobe/stats; align id + nickname with the signed-in server profile. */
+export function syncLocalProfileWithServer(userId: string, nickname: string) {
+  if (typeof window === "undefined") return;
+  const nick = nickname.trim();
+  const cur = loadLocalProfile();
+  if (cur) saveLocalProfile({ ...cur, id: userId, nickname: nick });
+  else saveLocalProfile(defaultStoredProfile(nick, userId));
+}
+
 export function clearLocalProfile() {
   localStorage.removeItem(KEY);
 }

@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/mock-mode";
 import { nicknameSchema } from "@/lib/validation";
-import { defaultStoredProfile, saveLocalProfile } from "@/lib/local-profile";
+import {
+  defaultStoredProfile,
+  loadLocalProfile,
+  saveLocalProfile,
+  syncLocalProfileWithServer,
+} from "@/lib/local-profile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,7 +22,48 @@ export default function EnterPage() {
   const [nick, setNick] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(() => !isSupabaseConfigured());
   const cloud = isSupabaseConfigured();
+
+  useEffect(() => {
+    if (!cloud) {
+      const p = loadLocalProfile();
+      if (p?.nickname) setNick(p.nickname);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      let redirected = false;
+      try {
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (session?.user) {
+          const { data: row } = await supabase
+            .from("profiles")
+            .select("nickname")
+            .eq("id", session.user.id)
+            .maybeSingle();
+          if (cancelled) return;
+          if (row?.nickname?.trim()) {
+            syncLocalProfileWithServer(session.user.id, row.nickname);
+            redirected = true;
+            router.replace("/lobby");
+            return;
+          }
+        }
+        const p = loadLocalProfile();
+        if (p?.nickname) setNick(p.nickname);
+      } finally {
+        if (!cancelled && !redirected) setReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cloud, router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,7 +107,9 @@ export default function EnterPage() {
         }
         const { data: u } = await supabase.auth.getUser();
         if (!u.user) throw new Error("No session");
-        saveLocalProfile(defaultStoredProfile(parsed.data, u.user.id));
+        const prev = loadLocalProfile();
+        if (prev && prev.id === u.user.id) saveLocalProfile({ ...prev, nickname: parsed.data });
+        else saveLocalProfile(defaultStoredProfile(parsed.data, u.user.id));
       } else {
         saveLocalProfile(defaultStoredProfile(parsed.data));
       }
@@ -84,12 +132,17 @@ export default function EnterPage() {
         <CardHeader>
           <CardTitle className="font-black">Pick a nickname</CardTitle>
           <CardDescription>
-            We&apos;ll remember you on this device via your browser session. Clearing site data or switching
-            browser/incognito starts a fresh login — your old nickname may look &quot;taken&quot;. Customize your look
-            later in the wardrobe.
+            Your nickname belongs to your <strong className="font-medium text-foreground">account</strong> (anonymous
+            session in this browser): <strong className="font-medium text-foreground">one player, one public name</strong>
+            . After you enter, Wardrobe only changes your look — not this name. We pre-fill your last nickname from this
+            device. If you clear site data or use another browser, you get a new account; the old name stays on the old
+            one until we add optional sign-in (email) for recovery.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {!ready ? (
+            <p className="text-sm text-muted-foreground">Checking your session…</p>
+          ) : (
           <form className="space-y-4" onSubmit={submit}>
             {err ? <p className="text-sm text-red-300">{err}</p> : null}
             <div>
@@ -114,6 +167,7 @@ export default function EnterPage() {
               <Link href="/">Back to home</Link>
             </Button>
           </form>
+          )}
         </CardContent>
       </Card>
     </div>
