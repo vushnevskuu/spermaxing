@@ -63,6 +63,7 @@ import { playLobbyWhisperChime } from "@/lib/lobby-whisper-chime";
 import { cn } from "@/lib/utils";
 import {
   applyEggCoreRepulsion,
+  applyEggMantleSqueeze,
   applySwimmerRepulsion,
   clampLobbyPosition,
   separateSwimmersPairwise,
@@ -719,9 +720,11 @@ export function LobbyClient() {
       posRef.current.y = pts[pts.length - 1].y;
       for (const b of list) {
         applyEggCoreRepulsion(b);
+        applyEggMantleSqueeze(b);
         clampLobbyPosition(b);
       }
       applyEggCoreRepulsion(posRef.current);
+      applyEggMantleSqueeze(posRef.current);
       clampLobbyPosition(posRef.current);
       othersPositionsRef.current = list.map((b) => ({ x: b.x, y: b.y }));
       setSwimmers(() => {
@@ -1124,6 +1127,7 @@ export function LobbyClient() {
       if (move && (keys.current["KeyD"] || keys.current["ArrowRight"])) posRef.current.x += sp;
       clampLobbyPosition(posRef.current);
       applyEggCoreRepulsion(posRef.current);
+      applyEggMantleSqueeze(posRef.current);
       applySwimmerRepulsion(posRef.current, othersPositionsRef.current);
       clampLobbyPosition(posRef.current);
       if (me) {

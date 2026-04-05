@@ -6,10 +6,13 @@ export const SWIMMER_HIT_RADIUS = 0.036;
 /** Fraction of EGG_ZONE radii: inside this ellipse, swimmers get a soft push outward (outer ring still queues). */
 const EGG_CORE_SCALE = 0.52;
 
+/** `el = (dx/rx)² + (dy/ry)²` at core boundary (matches inner repulsion ellipse). */
+const EGG_CORE_EL = EGG_CORE_SCALE * EGG_CORE_SCALE;
+
 /**
  * Soft repulsion from the dense center of the egg (same center as queue zone).
  */
-export function applyEggCoreRepulsion(pos: { x: number; y: number }, strength = 0.0038): void {
+export function applyEggCoreRepulsion(pos: { x: number; y: number }, strength = 0.0045): void {
   const { cx, cy, rx, ry } = EGG_ZONE;
   const rx0 = rx * EGG_CORE_SCALE;
   const ry0 = ry * EGG_CORE_SCALE;
@@ -29,6 +32,32 @@ export function applyEggCoreRepulsion(pos: { x: number; y: number }, strength = 
   const push = penetration * strength * 7;
   pos.x += gx * push;
   pos.y += gy * push;
+}
+
+/**
+ * Mantle ring (between core and queue ellipse): outward push so sliding in from below feels “tight”.
+ * Stronger when `pos` is in the lower half of the egg (approaching from under the visual shell).
+ */
+export function applyEggMantleSqueeze(pos: { x: number; y: number }, strength = 0.0031): void {
+  const { cx, cy, rx, ry } = EGG_ZONE;
+  const dx = pos.x - cx;
+  const dy = pos.y - cy;
+  const el = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+  if (el >= 1 - 1e-10) return;
+  if (el <= EGG_CORE_EL + 1e-10) return;
+
+  let gx = (2 * dx) / (rx * rx);
+  let gy = (2 * dy) / (ry * ry);
+  const gl = Math.hypot(gx, gy);
+  if (gl < 1e-9) return;
+  gx /= gl;
+  gy /= gl;
+
+  const mantleT = (el - EGG_CORE_EL) / (1 - EGG_CORE_EL);
+  const below = Math.max(0, dy / ry);
+  const squeeze = strength * mantleT * (1 + below * 2.85);
+  pos.x += gx * squeeze;
+  pos.y += gy * squeeze;
 }
 
 /**

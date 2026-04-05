@@ -119,10 +119,16 @@ export function LobbyEggZone(props: { online: number; visualPulse: boolean }) {
           }}
         >
           <motion.div
-            className="relative h-full w-full origin-center rounded-full"
-            animate={shell}
-            style={{ transformOrigin: "50% 50%" }}
+            className="relative h-full w-full origin-center will-change-transform"
+            animate={reduce ? { scale: 1 } : { scale: [1, 1.026, 1] }}
+            transition={{ repeat: Infinity, duration: 3.45, ease: "easeInOut" }}
+            style={{ transformOrigin: "50% 54%" }}
           >
+            <motion.div
+              className="relative h-full w-full origin-center rounded-full"
+              animate={shell}
+              style={{ transformOrigin: "50% 50%" }}
+            >
             <div
               className="relative h-full w-full overflow-hidden rounded-full border border-fuchsia-400/35"
               style={{
@@ -166,6 +172,7 @@ export function LobbyEggZone(props: { online: number; visualPulse: boolean }) {
                 </span>
               </motion.div>
             </div>
+            </motion.div>
           </motion.div>
         </motion.div>
       </div>
