@@ -4,13 +4,14 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/mock-mode";
-import { loadLocalProfile } from "@/lib/local-profile";
+import { SwimmerAvatar } from "@/components/avatar/swimmer-avatar";
 import { Button } from "@/components/ui/button";
 import { BAD_ITEMS, GOOD_ITEMS, OBSTACLES, type BadId, type GoodId, type ObstacleId } from "@/lib/vertical-rush-catalog";
+import { loadLocalProfile, type StoredProfile } from "@/lib/local-profile";
 import {
   drawLaneDividers,
   drawPickupOrObstacle,
-  drawPlayerSwimmer,
+  drawPlayerGroundGlow,
   drawProjectile,
   drawVerticalRushBackground,
 } from "@/lib/vertical-rush-render";
@@ -57,6 +58,8 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
   const embed = variant === "embed";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const playerSlotRef = useRef<HTMLDivElement>(null);
+  const [profile, setProfile] = useState<StoredProfile | null>(null);
   const [phase, setPhase] = useState<"loading" | "countdown" | "ready" | "play" | "dead">("loading");
   const [countdown, setCountdown] = useState<number | null>(null);
   const [hud, setHud] = useState({
@@ -96,6 +99,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
       router.replace("/enter");
       return;
     }
+    setProfile(p);
     try {
       const v = localStorage.getItem("ovum_vertical_rush_best_m");
       if (v) setBestLocal(Math.max(0, parseInt(v, 10) || 0));
@@ -427,7 +431,12 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         drawProjectile(ctx, cx, screenY, now);
       }
 
-      drawPlayerSwimmer(ctx, px, py, now);
+      drawPlayerGroundGlow(ctx, px, py, now);
+      const slot = playerSlotRef.current;
+      if (slot) {
+        slot.style.left = `${(laneCenterX(g.laneF) / W) * 100}%`;
+        slot.style.top = `${(PLAYER_Y / H) * 100}%`;
+      }
 
       gameRaf = requestAnimationFrame(loop);
     };
@@ -610,7 +619,7 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
               ref={canvasRef}
               width={W}
               height={H}
-              className="absolute left-0 top-0 block h-full max-h-full w-full max-w-full touch-manipulation"
+              className="absolute left-0 top-0 z-0 block h-full max-h-full w-full max-w-full touch-manipulation"
               style={{
                 imageRendering: "pixelated",
               }}
@@ -622,6 +631,33 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
                 g.laneF = Math.max(0, Math.min(LANES - 1, (x / rect.width) * LANES - 0.5));
               }}
             />
+            {profile && (phase === "play" || phase === "dead") ? (
+              <div
+                ref={playerSlotRef}
+                className="pointer-events-none absolute z-[2]"
+                style={{
+                  left: `${(laneCenterX(1) / W) * 100}%`,
+                  top: `${(PLAYER_Y / H) * 100}%`,
+                  width: 0,
+                  height: 0,
+                }}
+              >
+                <div className="relative -translate-x-1/2 -translate-y-1/2">
+                  <SwimmerAvatar
+                    colorTheme={profile.colorTheme}
+                    tailType={profile.tailType}
+                    auraEffect={profile.auraEffect}
+                    headgear={profile.headgear}
+                    faceExtra={profile.faceExtra}
+                    neckWear={profile.neckWear}
+                    size="lg"
+                    facingDeg={-90}
+                    moving={phase === "play"}
+                    className="drop-shadow-[0_0_14px_rgba(168,85,247,0.45)]"
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
           {phase === "play" ? (
             <div className="mt-2 grid grid-cols-3 gap-1 text-center font-mono text-[10px] text-muted-foreground">

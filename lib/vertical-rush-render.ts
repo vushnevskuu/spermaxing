@@ -1,10 +1,33 @@
 /**
- * Procedural “LCD / Nokia plane” style sprites — no external assets.
+ * Procedural OVUM-style climb art: neon tunnel, readable pickups (no external bitmaps).
  */
 
-import type { BadId, GoodId, ObstacleId } from "@/lib/vertical-rush-catalog";
+import { BAD_ITEMS, GOOD_ITEMS, OBSTACLES, type BadId, type GoodId, type ObstacleId } from "@/lib/vertical-rush-catalog";
 
 const TAU = Math.PI * 2;
+
+function catalogColor(kind: "good" | "bad" | "obs", id: GoodId | BadId | ObstacleId): string {
+  if (kind === "good") return GOOD_ITEMS.find((g) => g.id === id)?.color ?? "#67e8f9";
+  if (kind === "bad") return BAD_ITEMS.find((b) => b.id === id)?.color ?? "#f472b6";
+  return OBSTACLES.find((o) => o.id === id)?.color ?? "#94a3b8";
+}
+
+function drawItemAura(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string, r: number, alpha: number) {
+  const hex = /^#?([0-9a-f]{6})$/i.exec(color.trim());
+  if (!hex) return;
+  const n = parseInt(hex[1], 16);
+  const rr = (n >> 16) & 255;
+  const gg = (n >> 8) & 255;
+  const bb = n & 255;
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, `rgba(${rr},${gg},${bb},${alpha * 0.9})`);
+  g.addColorStop(0.5, `rgba(${rr},${gg},${bb},${alpha * 0.22})`);
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, TAU);
+  ctx.fill();
+}
 
 function strokeRoundRect(
   ctx: CanvasRenderingContext2D,
@@ -28,7 +51,7 @@ function strokeRoundRect(
   ctx.closePath();
 }
 
-/** Scrolling retro grid + vignette */
+/** OVUM climb tunnel: neon ovum-field, parallax grid, soft “flow” curves (cartoon, non-explicit). */
 export function drawVerticalRushBackground(
   ctx: CanvasRenderingContext2D,
   W: number,
@@ -36,98 +59,108 @@ export function drawVerticalRushBackground(
   scroll: number,
   nowMs: number
 ) {
-  /* Slightly lifted from pure black so WebKit/flex layouts never read as “broken / empty”. */
-  const top = "#1a0d3d";
-  const mid = "#1a1030";
-  const bot = "#0c0818";
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, top);
-  g.addColorStop(0.45, mid);
-  g.addColorStop(1, bot);
-  ctx.fillStyle = g;
+  const g0 = ctx.createLinearGradient(0, 0, 0, H);
+  g0.addColorStop(0, "#1e0b3a");
+  g0.addColorStop(0.38, "#12061f");
+  g0.addColorStop(0.72, "#070212");
+  g0.addColorStop(1, "#020105");
+  ctx.fillStyle = g0;
   ctx.fillRect(0, 0, W, H);
 
-  const drift = (scroll * 0.35 + nowMs * 0.02) % 24;
-  ctx.strokeStyle = "rgba(34,211,238,0.06)";
+  const rg = ctx.createRadialGradient(W * 0.5, H * 0.08, 0, W * 0.5, H * 0.12, H * 0.55);
+  rg.addColorStop(0, "rgba(250, 204, 21, 0.14)");
+  rg.addColorStop(0.35, "rgba(168, 85, 247, 0.08)");
+  rg.addColorStop(0.7, "rgba(34, 211, 238, 0.04)");
+  rg.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, W, H);
+
+  const side = ctx.createLinearGradient(0, 0, W, 0);
+  side.addColorStop(0, "rgba(34, 211, 238, 0.07)");
+  side.addColorStop(0.12, "rgba(0,0,0,0)");
+  side.addColorStop(0.88, "rgba(0,0,0,0)");
+  side.addColorStop(1, "rgba(192, 132, 252, 0.07)");
+  ctx.fillStyle = side;
+  ctx.fillRect(0, 0, W, H);
+
+  const flow = (scroll * 0.22 + nowMs * 0.018) % 140;
+  ctx.strokeStyle = "rgba(168, 85, 247, 0.11)";
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  for (let i = -2; i < 6; i++) {
+    const y0 = i * 140 - flow;
+    ctx.beginPath();
+    ctx.moveTo(-20, y0);
+    ctx.bezierCurveTo(W * 0.35, y0 + 50, W * 0.65, y0 - 30, W + 20, y0 + 70);
+    ctx.stroke();
+  }
+
+  const drift = (scroll * 0.42 + nowMs * 0.025) % 28;
+  ctx.strokeStyle = "rgba(34, 211, 238, 0.055)";
   ctx.lineWidth = 1;
-  for (let y = -drift; y < H + 24; y += 24) {
+  for (let y = -drift; y < H + 28; y += 28) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(W, y);
     ctx.stroke();
   }
 
-  ctx.strokeStyle = "rgba(168,85,247,0.04)";
-  for (let x = 0; x < W; x += 18) {
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.028)";
+  for (let x = 0; x < W; x += 22) {
+    const skew = scroll * 0.08 + x * 0.04;
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x + 40, H);
+    ctx.moveTo(x + (skew % 16), 0);
+    ctx.lineTo(x + 36 + (skew % 16), H);
     ctx.stroke();
   }
 
-  const pulse = 0.5 + Math.sin(nowMs * 0.004) * 0.08;
-  ctx.fillStyle = `rgba(250, 204, 21, ${0.03 * pulse})`;
-  ctx.fillRect(0, 0, W, H * 0.22);
+  const vg = ctx.createRadialGradient(W * 0.5, H * 0.92, 10, W * 0.5, H * 0.92, H * 0.65);
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(1, "rgba(0,0,0,0.45)");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
 }
 
 export function drawLaneDividers(ctx: CanvasRenderingContext2D, W: number, H: number, lanes: number, nowMs: number) {
-  const dash = 10 + (nowMs * 0.01) % 6;
+  const dash = 10 + (nowMs * 0.012) % 7;
   for (let L = 1; L < lanes; L++) {
     const x = L * (W / lanes);
-    ctx.strokeStyle = "rgba(255,255,255,0.07)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([dash, 8]);
+    const lg = ctx.createLinearGradient(x - 3, 0, x + 3, 0);
+    lg.addColorStop(0, "rgba(34, 211, 238, 0)");
+    lg.addColorStop(0.5, "rgba(216, 180, 254, 0.42)");
+    lg.addColorStop(1, "rgba(34, 211, 238, 0)");
+    ctx.strokeStyle = lg;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = "rgba(34, 211, 238, 0.35)";
+    ctx.shadowBlur = 6;
+    ctx.setLineDash([dash, 7]);
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, H);
     ctx.stroke();
+    ctx.shadowBlur = 0;
     ctx.setLineDash([]);
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
   }
 }
 
-/** Swimmer “plane” facing up — cartoon, non-explicit */
-export function drawPlayerSwimmer(ctx: CanvasRenderingContext2D, px: number, py: number, nowMs: number) {
-  const wob = Math.sin(nowMs * 0.012) * 2;
-  const tail = Math.sin(nowMs * 0.018) * 4;
-
-  ctx.save();
-  ctx.translate(px, py + wob);
-
-  ctx.fillStyle = "#1e1b4b";
-  ctx.strokeStyle = "#7c3aed";
-  ctx.lineWidth = 2.5;
+/** Ground glow under the HTML SwimmerAvatar (reads as “hover” in the tunnel). */
+export function drawPlayerGroundGlow(ctx: CanvasRenderingContext2D, px: number, py: number, nowMs: number) {
+  const pulse = 0.85 + Math.sin(nowMs * 0.006) * 0.12;
+  const g = ctx.createRadialGradient(px, py + 6, 0, px, py + 6, 38 * pulse);
+  g.addColorStop(0, "rgba(34, 211, 238, 0.35)");
+  g.addColorStop(0.35, "rgba(168, 85, 247, 0.2)");
+  g.addColorStop(0.65, "rgba(250, 204, 21, 0.08)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.ellipse(0, -2, 16, 20, 0, 0, TAU);
+  ctx.ellipse(px, py + 8, 32 * pulse, 14 * pulse, 0, 0, TAU);
   ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = "#fef08a";
-  ctx.beginPath();
-  ctx.arc(-6, -10, 3.5, 0, TAU);
-  ctx.arc(7, -10, 3.5, 0, TAU);
-  ctx.fill();
-  ctx.fillStyle = "#0f172a";
-  ctx.beginPath();
-  ctx.arc(-5.5, -9.5, 1.4, 0, TAU);
-  ctx.arc(7.5, -9.5, 1.4, 0, TAU);
-  ctx.fill();
-
-  ctx.fillStyle = "#4ade80";
-  ctx.beginPath();
-  ctx.moveTo(0, 6);
-  ctx.quadraticCurveTo(-26 + tail, 28, -38 + tail * 0.5, 12);
-  ctx.quadraticCurveTo(-16, 18, 0, 6);
-  ctx.fill();
-  ctx.strokeStyle = "#22c55e";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  ctx.fillStyle = "rgba(192,132,252,0.35)";
-  ctx.beginPath();
-  ctx.ellipse(0, -2, 22, 26, 0, 0, TAU);
-  ctx.fill();
-
-  ctx.restore();
 }
 
 function drawGoodZinc(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
@@ -463,6 +496,9 @@ export function drawPickupOrObstacle(
   nowMs: number
 ) {
   const t = nowMs * 0.003;
+  const accent = catalogColor(kind, id);
+  drawItemAura(ctx, cx, cy, accent, kind === "obs" ? 36 : 32, kind === "good" ? 0.42 : kind === "bad" ? 0.38 : 0.32);
+
   if (kind === "good") {
     switch (id as GoodId) {
       case "zinc":
@@ -481,10 +517,18 @@ export function drawPickupOrObstacle(
         drawGoodCitrus(ctx, cx, cy, t);
         break;
     }
-    ctx.strokeStyle = "rgba(34,211,238,0.5)";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(34,211,238,0.75)";
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "rgba(34,211,238,0.55)";
+    ctx.shadowBlur = 10;
     ctx.beginPath();
-    ctx.arc(cx, cy, 24, 0, TAU);
+    ctx.arc(cx, cy, 25, 0, TAU);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(250, 250, 255, 0.35)";
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 22, 0, TAU);
     ctx.stroke();
     return;
   }
@@ -506,11 +550,21 @@ export function drawPickupOrObstacle(
         drawBadSugarCube(ctx, cx, cy, t);
         break;
     }
-    ctx.strokeStyle = "rgba(244,114,182,0.45)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = "rgba(244,114,182,0.65)";
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = "rgba(244,114,182,0.4)";
+    ctx.shadowBlur = 8;
+    ctx.setLineDash([5, 4]);
     ctx.beginPath();
-    ctx.arc(cx, cy, 24, 0, TAU);
+    ctx.arc(cx, cy, 26, 0, TAU);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "rgba(251, 113, 133, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 22, 0, TAU);
     ctx.stroke();
     ctx.setLineDash([]);
     return;
@@ -532,9 +586,16 @@ export function drawPickupOrObstacle(
       drawObsDryWind(ctx, cx, cy, t);
       break;
   }
-  ctx.strokeStyle = "rgba(248,113,113,0.55)";
-  ctx.lineWidth = 2;
-  strokeRoundRect(ctx, cx - 26, cy - 22, 52, 44, 4);
+  ctx.strokeStyle = "rgba(248,113,113,0.85)";
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = "rgba(239, 68, 68, 0.45)";
+  ctx.shadowBlur = 12;
+  strokeRoundRect(ctx, cx - 27, cy - 23, 54, 46, 6);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(254, 202, 202, 0.4)";
+  ctx.lineWidth = 1.25;
+  strokeRoundRect(ctx, cx - 24, cy - 20, 48, 40, 4);
   ctx.stroke();
 }
 
