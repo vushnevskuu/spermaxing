@@ -4,7 +4,12 @@ import { useEffect, useMemo } from "react";
 import { motion, useAnimation, useReducedMotion } from "framer-motion";
 import { useLobbyRhythmStore } from "@/store/lobby-rhythm-store";
 
-const DIM_RGB = "82, 82, 82";
+/** OVUM neon: fuchsia / purple shell (not flat “barbie” pink). */
+const SHELL_RGB = "168, 85, 247";
+const SHELL_DEEP_RGB = "88, 28, 135";
+const SHELL_ROSE_RGB = "190, 24, 93";
+/** Particles: same family, shifted warmer (more red) than shell pink. */
+const PARTICLE_RGB = "244, 63, 94";
 
 const EGG_PARTICLE_SEEDS = Array.from({ length: 14 }, (_, i) => ({
   key: i,
@@ -42,7 +47,7 @@ function EggAccentBurst({
       {rays.map((r, i) => (
         <motion.span
           key={`${generation}-${i}`}
-          className="absolute rounded-full bg-white/75 shadow-[0_0_6px_rgba(255,255,255,0.45)]"
+          className="absolute rounded-full bg-fuchsia-200/80 shadow-[0_0_8px_rgba(232,121,249,0.55)]"
           style={{
             width: r.size,
             height: r.size,
@@ -87,30 +92,30 @@ export function LobbyEggZone(props: { online: number; visualPulse: boolean }) {
   return (
     <div
       className="pointer-events-none absolute left-1/2 z-20 aspect-square w-[min(48vmin,300px)] -translate-x-1/2"
-      style={{ top: "-24%" }}
+      style={{ top: "-14%" }}
       aria-hidden
     >
       <div className="relative h-full w-full">
         <motion.div
           className="absolute -inset-3 rounded-full blur-2xl"
-          animate={{ opacity: [0.35, 0.48, 0.35] }}
+          animate={{ opacity: [0.42, 0.58, 0.42] }}
           transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
           style={{
-            background: `linear-gradient(90deg, rgba(255,255,255,0.07) 0%, transparent 45%, transparent 55%, rgba(${DIM_RGB},0.15) 100%)`,
+            background: `linear-gradient(125deg, rgba(${SHELL_RGB},0.35) 0%, rgba(${SHELL_ROSE_RGB},0.22) 45%, rgba(${SHELL_DEEP_RGB},0.32) 100%)`,
           }}
         />
         <motion.div
           className="absolute inset-0 rounded-full p-[7px]"
           animate={{
             boxShadow: [
-              `0 0 28px rgba(255,255,255,0.06), inset 0 0 20px rgba(255,255,255,0.03)`,
-              `0 0 36px rgba(255,255,255,0.09), inset 0 0 24px rgba(255,255,255,0.04)`,
-              `0 0 28px rgba(255,255,255,0.06), inset 0 0 20px rgba(255,255,255,0.03)`,
+              `0 0 32px rgba(${SHELL_RGB},0.35), 0 0 48px rgba(${SHELL_ROSE_RGB},0.15), inset 0 0 26px rgba(${SHELL_DEEP_RGB},0.35)`,
+              `0 0 40px rgba(${SHELL_RGB},0.45), 0 0 56px rgba(${SHELL_ROSE_RGB},0.22), inset 0 0 30px rgba(${SHELL_DEEP_RGB},0.42)`,
+              `0 0 32px rgba(${SHELL_RGB},0.35), 0 0 48px rgba(${SHELL_ROSE_RGB},0.15), inset 0 0 26px rgba(${SHELL_DEEP_RGB},0.35)`,
             ],
           }}
           transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
           style={{
-            background: `linear-gradient(135deg, rgba(${DIM_RGB},0.2), rgba(20,20,20,0.5), rgba(${DIM_RGB},0.12))`,
+            background: `linear-gradient(145deg, rgba(${SHELL_DEEP_RGB},0.55), rgba(${SHELL_ROSE_RGB},0.35), rgba(${SHELL_RGB},0.2))`,
           }}
         >
           <motion.div
@@ -119,22 +124,25 @@ export function LobbyEggZone(props: { online: number; visualPulse: boolean }) {
             style={{ transformOrigin: "50% 50%" }}
           >
             <div
-              className="relative h-full w-full overflow-hidden rounded-full border border-white/10"
+              className="relative h-full w-full overflow-hidden rounded-full border border-fuchsia-400/35"
               style={{
-                backgroundColor: "rgba(14,14,14,0.96)",
+                background: `radial-gradient(ellipse 85% 75% at 50% 38%, rgba(${SHELL_ROSE_RGB},0.42) 0%, rgba(${SHELL_DEEP_RGB},0.88) 42%, rgba(12,6,18,0.97) 100%)`,
+                boxShadow: "inset 0 0 40px rgba(0,0,0,0.35)",
               }}
             >
               <div className="pointer-events-none absolute inset-[5%] overflow-hidden rounded-full">
                 {EGG_PARTICLE_SEEDS.map((p) => (
                   <span
                     key={p.key}
-                    className="egg-particle absolute rounded-full bg-white/40"
+                    className="egg-particle absolute rounded-full"
                     style={{
                       left: `${p.left}%`,
                       top: `${p.top}%`,
                       width: p.size + 0.5,
                       height: p.size + 0.5,
-                      opacity: p.opacity * 0.9,
+                      opacity: p.opacity * 0.95,
+                      backgroundColor: `rgba(${PARTICLE_RGB}, 0.62)`,
+                      boxShadow: `0 0 ${4 + (p.key % 3)}px rgba(${PARTICLE_RGB}, 0.45)`,
                       animation: `egg-particle-drift ${p.duration}s ease-in-out infinite`,
                       animationDelay: `${p.delay}s`,
                     }}
@@ -148,9 +156,10 @@ export function LobbyEggZone(props: { online: number; visualPulse: boolean }) {
                 style={{ transformOrigin: "50% 50%" }}
               >
                 <span
-                  className="text-[2.65rem] font-semibold tabular-nums tracking-tight text-white"
+                  className="text-[2.65rem] font-semibold tabular-nums tracking-tight text-fuchsia-50"
                   style={{
-                    textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                    textShadow:
+                      "0 1px 2px rgba(0,0,0,0.65), 0 0 18px rgba(168,85,247,0.35)",
                   }}
                 >
                   {online}
