@@ -4,7 +4,7 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  /* Минималистичная тёмная тема: нейтраль, без кричащих акцентов */
+  /* Minimal dark theme: neutral, low-key accents */
   --color-background: #0a0a0a;
   --color-foreground: #fafafa;
   --color-card: #111111;

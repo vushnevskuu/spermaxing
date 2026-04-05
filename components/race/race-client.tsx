@@ -418,12 +418,12 @@ export function RaceClient({ roomId }: { roomId: string }) {
           </div>
         </div>
         <p className="text-center text-[10px] leading-snug text-muted-foreground">
-          <span className="text-foreground/85">Sprint heat</span> — три полосы, уклоняйся от неоновых помех, гони прогресс быстрее
-          соперника. Отдельный режим:{" "}
+          <span className="text-foreground/85">Sprint heat</span> — three lanes, dodge the neon hazards, push your progress past
+          the rival. Separate mode:{" "}
           <Link href="/rush" className="text-cyan-300 underline underline-offset-2 hover:text-cyan-200">
             Vertical rush
           </Link>
-          . Развлечение, не совет.
+          . Entertainment only — not medical advice.
         </p>
 
         <AnimatePresence mode="wait">
@@ -500,7 +500,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
 
               <div className="absolute left-3 right-3 top-[3.9rem] z-10 flex flex-col gap-1 text-[10px] font-mono text-muted-foreground">
                 <div className="flex justify-between gap-1">
-                  <span className="leading-tight text-cyan-100/75">← → полосы · обходи пурпурные сферы</span>
+                  <span className="leading-tight text-cyan-100/75">← → lanes · avoid the purple orbs</span>
                   <span className="shrink-0 text-amber-200/90">Space / GO — boost</span>
                 </div>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-cyan-500/15">

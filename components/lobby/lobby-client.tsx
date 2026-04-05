@@ -1406,8 +1406,8 @@ export function LobbyClient() {
               aria-pressed={lobbyMusicOn}
               aria-label={
                 lobbyMusicOn
-                  ? "Выключить фоновый ритм лобби"
-                  : "Включить фоновый ритм лобби (клик — разблокирует звук в браузере)"
+                  ? "Turn off lobby background beat"
+                  : "Turn on lobby background beat (click unlocks audio in the browser)"
               }
               onClick={() => {
                 const next = !lobbyMusicOn;
@@ -1518,10 +1518,10 @@ export function LobbyClient() {
                     <div className="flex flex-col gap-2 pr-1 font-sans text-[11px] leading-snug">
                       {!mock &&
                       (chatHistoryStatus === "idle" || chatHistoryStatus === "loading") ? (
-                        <p className="py-2 text-center text-[10px] text-zinc-500">Загрузка чата…</p>
+                        <p className="py-2 text-center text-[10px] text-zinc-500">Loading chat…</p>
                       ) : chatHistoryStatus === "error" ? (
                         <div className="flex flex-col items-center gap-2 py-2 text-center text-[10px] text-red-300">
-                          <p>{chatHistoryError ?? "Не удалось загрузить историю"}</p>
+                          <p>{chatHistoryError ?? "Could not load chat history"}</p>
                           <Button
                             type="button"
                             size="sm"
@@ -1529,7 +1529,7 @@ export function LobbyClient() {
                             className="h-7 text-xs"
                             onClick={() => setChatBootToken((t) => t + 1)}
                           >
-                            Повторить
+                            Retry
                           </Button>
                         </div>
                       ) : null}
@@ -1593,7 +1593,7 @@ export function LobbyClient() {
                       })
                         : null}
                       {(chatHistoryStatus === "ready" || mock) && visibleMessages.length === 0 ? (
-                        <p className="py-2 text-center text-[10px] text-zinc-500">Пока нет сообщений.</p>
+                        <p className="py-2 text-center text-[10px] text-zinc-500">No messages yet.</p>
                       ) : null}
                     </div>
                   </ScrollArea>

@@ -1,11 +1,11 @@
-/** Parse chat commands: `/w Name text` or `/ш Name text` (Cyrillic alias). */
+/** Parse chat commands: `/w Name text`. */
 export type ParsedChat =
   | { kind: "say"; text: string }
   | { kind: "whisper"; targetNick: string; text: string };
 
 export function parseChatCommand(raw: string): ParsedChat {
   const s = raw.trim();
-  const m = s.match(/^\/(?:w|ш|шепот|шёпот)\s+(\S+)\s+([\s\S]+)$/i);
+  const m = s.match(/^\/w\s+(\S+)\s+([\s\S]+)$/i);
   if (m) {
     return { kind: "whisper", targetNick: m[1], text: m[2].trim() };
   }
@@ -17,7 +17,7 @@ export function parseChatCommand(raw: string): ParsedChat {
  * Returns `null` once the message body has started (anything after name + space + non-empty text).
  */
 export function parseWhisperAutocompleteState(raw: string): null | { query: string } {
-  const prefix = raw.match(/^\/(?:w|ш|шепот|шёпот)/i);
+  const prefix = raw.match(/^\/w/i);
   if (!prefix) return null;
   const rest = raw.slice(prefix[0].length);
   const afterCmd = rest.replace(/^\s*/, "");
