@@ -166,40 +166,76 @@ export function drawCitrusCometTrail(ctx: CanvasRenderingContext2D, px: number, 
 }
 
 /**
- * Вражеский сперматозоид навстречу игроку: тот же силуэт, что у аватара (голова + жгутик),
- * без глаз и без «шмоток», слегка розовый (cartoon, non-explicit).
+ * Вражеский сперматозоид: тот же read, что у яйца — градиент, ореол, кольцо-угроза;
+ * голова без глаз (только блик), жгутик широкий и волнообразный (cartoon, non-explicit).
  */
 export function drawRivalSwimmer(ctx: CanvasRenderingContext2D, cx: number, cy: number, nowMs: number) {
   const t = nowMs * 0.0035;
-  const wob = Math.sin(t * 1.1) * 1.6;
+  const wob = Math.sin(t * 1.05) * 1.35;
+  const wave = Math.sin(t * 1.45) * 6;
   ctx.save();
   ctx.translate(cx, cy + wob);
-  const headFill = "#fda4af";
-  const headStroke = "#f43f5e";
-  const tailFill = "#fecdd3";
-  const tailStroke = "#fb7185";
-  ctx.fillStyle = "rgba(244, 63, 94, 0.12)";
+
+  const halo = ctx.createRadialGradient(0, 6, 0, 0, 6, 38);
+  halo.addColorStop(0, "rgba(244,63,94,0.32)");
+  halo.addColorStop(0.4, "rgba(190,24,93,0.14)");
+  halo.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.ellipse(0, 6, 22, 20, 0, 0, TAU);
+  ctx.arc(0, 6, 38, 0, TAU);
   ctx.fill();
-  ctx.fillStyle = tailFill;
-  ctx.strokeStyle = tailStroke;
-  ctx.lineWidth = 2.2;
+
+  ctx.strokeStyle = "rgba(251,113,133,0.55)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 6]);
   ctx.beginPath();
-  ctx.moveTo(2, -2);
-  ctx.quadraticCurveTo(-18 + Math.sin(t * 1.35) * 4, -22, -32 + Math.sin(t * 1.1) * 2, -14);
-  ctx.quadraticCurveTo(-20, 4, -2, 8);
-  ctx.quadraticCurveTo(4, 4, 2, -2);
+  ctx.arc(1, 7, 31, 0, TAU);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = "#fb7185";
+  ctx.strokeStyle = "#9f1239";
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(10, 9);
+  ctx.bezierCurveTo(2, 12, -8, 6, -16, -4 + wave * 0.25);
+  ctx.bezierCurveTo(-24, -14 + wave, -34, -22 + wave * 0.6, -40, -12 + wave * 0.35);
+  ctx.bezierCurveTo(-36, 2, -22, 12, -6, 14);
+  ctx.bezierCurveTo(4, 15, 10, 12, 10, 9);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = headFill;
-  ctx.strokeStyle = headStroke;
-  ctx.lineWidth = 2.4;
+
+  ctx.strokeStyle = "rgba(255,255,255,0.42)";
+  ctx.lineWidth = 1.6;
   ctx.beginPath();
-  ctx.ellipse(2, 10, 16, 13, Math.sin(t * 0.9) * 0.08, 0, TAU);
-  ctx.fill();
+  ctx.moveTo(6, 10);
+  ctx.bezierCurveTo(-4, 10, -14, 2, -22, -8 + wave * 0.3);
+  ctx.bezierCurveTo(-28, -14 + wave * 0.5, -34, -16 + wave * 0.4, -38, -10);
   ctx.stroke();
+
+  const hx = 3;
+  const hy = 11;
+  const headGrad = ctx.createRadialGradient(hx - 5, hy - 6, 1, hx, hy, 17);
+  headGrad.addColorStop(0, "#fff1f2");
+  headGrad.addColorStop(0.25, "#fda4af");
+  headGrad.addColorStop(0.65, "#f43f5e");
+  headGrad.addColorStop(1, "#be123c");
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.ellipse(hx, hy, 16, 13, Math.sin(t * 0.85) * 0.1, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = "#881337";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(hx - 6, hy - 5, 4.5, 2.8, -0.55, 0, TAU);
+  ctx.fill();
+
   ctx.restore();
 }
 
@@ -279,32 +315,49 @@ function drawGoodZinc(ctx: CanvasRenderingContext2D, x: number, y: number, t: nu
   ctx.moveTo(5, -5);
   ctx.lineTo(-5, 5);
   ctx.stroke();
+  ctx.strokeStyle = "rgba(34,211,238,0.35)";
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 8; i++) {
+    ctx.save();
+    ctx.rotate((i * Math.PI) / 4);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -20);
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
 }
 
-/** Softgel capsule (omega-3 read) + tiny Ω curve on body. */
+/** Softgel capsule: светлая база + тёмная правая половина + шов — читается как капсула. */
 function drawGoodOmega(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(Math.sin(t * 0.5) * 0.1);
-  ctx.fillStyle = "#7dd3fc";
-  ctx.strokeStyle = "#0284c7";
-  ctx.lineWidth = 2;
+  ctx.fillStyle = "#bae6fd";
+  ctx.strokeStyle = "#0369a1";
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.ellipse(0, 0, 8, 14, 0, 0, TAU);
+  ctx.ellipse(0, 0, 9, 15, 0, 0, TAU);
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,0.65)";
-  ctx.lineWidth = 1.5;
+  ctx.fillStyle = "rgba(2,132,199,0.5)";
+  ctx.beginPath();
+  ctx.ellipse(4, 0, 5.2, 13, 0, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(15,23,42,0.55)";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(0, -14);
+  ctx.lineTo(0, 14);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.85)";
+  ctx.lineWidth = 1.6;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(-4, -3);
-  ctx.bezierCurveTo(-1, -7, 1, -7, 4, -3);
+  ctx.moveTo(-4, -4);
+  ctx.bezierCurveTo(-1, -8, 1, -8, 4, -4);
   ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.beginPath();
-  ctx.ellipse(-2, 2, 2.5, 4, -0.3, 0, TAU);
-  ctx.fill();
   ctx.restore();
 }
 
@@ -327,10 +380,10 @@ function drawGoodGarlic(ctx: CanvasRenderingContext2D, x: number, y: number, t: 
   for (let i = -2; i <= 2; i++) {
     ctx.fillStyle = i === 0 ? "#fef08a" : "#fde047";
     ctx.beginPath();
-    ctx.arc(i * 4.5, -10, 3.2, 0, TAU);
+    ctx.arc(i * 4.8, -10, 3.5, 0, TAU);
     ctx.fill();
-    ctx.strokeStyle = "#eab308";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#ca8a04";
+    ctx.lineWidth = 1.35;
     ctx.stroke();
   }
   ctx.restore();
@@ -346,9 +399,9 @@ function drawGoodOnionRing(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.arc(0, 0, 5.5, 0, TAU);
   ctx.fill();
   ctx.strokeStyle = "#facc15";
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 6;
   ctx.beginPath();
-  ctx.arc(0, 0, 11, 0, TAU);
+  ctx.arc(0, 0, 11.5, 0, TAU);
   ctx.stroke();
   ctx.strokeStyle = "#fef08a";
   ctx.lineWidth = 1.5;
@@ -361,32 +414,41 @@ function drawGoodOnionRing(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.restore();
 }
 
-/** Orange slice: semicircle with segment lines from center. */
+/** Orange slice: толстая корка + доли — не спутать с монетой. */
 function drawGoodCitrus(ctx: CanvasRenderingContext2D, x: number, y: number, t: number) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(Math.sin(t) * 0.12);
-  ctx.fillStyle = "#eab308";
-  ctx.strokeStyle = "#a16207";
-  ctx.lineWidth = 2;
+  ctx.fillStyle = "#ca8a04";
+  ctx.strokeStyle = "#713f12";
+  ctx.lineWidth = 2.8;
   ctx.beginPath();
-  ctx.arc(0, 0, 13, 0.15 * Math.PI, 0.85 * Math.PI, false);
+  ctx.arc(0, 0, 15, 0.14 * Math.PI, 0.86 * Math.PI, false);
   ctx.lineTo(0, 0);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = "rgba(254,243,199,0.85)";
-  ctx.lineWidth = 1.25;
-  for (let i = 1; i <= 4; i++) {
-    const a = 0.15 * Math.PI + (i / 5) * 0.7 * Math.PI;
+  ctx.fillStyle = "#facc15";
+  ctx.strokeStyle = "#a16207";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 12, 0.16 * Math.PI, 0.84 * Math.PI, false);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(254,243,199,0.9)";
+  ctx.lineWidth = 1.35;
+  for (let i = 1; i <= 5; i++) {
+    const a = 0.16 * Math.PI + (i / 6) * 0.68 * Math.PI;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(Math.cos(a) * 12, Math.sin(a) * 12);
+    ctx.lineTo(Math.cos(a) * 11, Math.sin(a) * 11);
     ctx.stroke();
   }
-  ctx.fillStyle = "#fef9c3";
+  ctx.fillStyle = "#fefce8";
   ctx.beginPath();
-  ctx.arc(0, 0, 3, 0, TAU);
+  ctx.arc(0, 0, 3.2, 0, TAU);
   ctx.fill();
   ctx.restore();
 }
@@ -421,6 +483,17 @@ function drawBadChips(ctx: CanvasRenderingContext2D, x: number, y: number, t: nu
   ctx.beginPath();
   ctx.moveTo(-6, 2);
   ctx.lineTo(6, 5);
+  ctx.stroke();
+  ctx.fillStyle = "#dc2626";
+  ctx.strokeStyle = "#7f1d1d";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-4, -2);
+  ctx.lineTo(4, -2);
+  ctx.lineTo(3, 4);
+  ctx.lineTo(-3, 4);
+  ctx.closePath();
+  ctx.fill();
   ctx.stroke();
   ctx.restore();
 }
@@ -458,6 +531,12 @@ function drawBadCandy(ctx: CanvasRenderingContext2D, x: number, y: number, t: nu
   ctx.beginPath();
   ctx.arc(-2, -2, 2.5, 0, TAU);
   ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.65)";
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(0, 0, 5.5, -0.4 * Math.PI, 0.45 * Math.PI);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -467,32 +546,35 @@ function drawBadSoda(ctx: CanvasRenderingContext2D, x: number, y: number, t: num
   ctx.translate(x, y);
   ctx.fillStyle = "#0ea5e9";
   ctx.strokeStyle = "#075985";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
-  ctx.moveTo(-9, 10);
-  ctx.lineTo(-7, -4);
-  ctx.lineTo(7, -4);
-  ctx.lineTo(9, 10);
+  ctx.moveTo(-11, 12);
+  ctx.lineTo(-8, -5);
+  ctx.lineTo(8, -5);
+  ctx.lineTo(11, 12);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  ctx.fillStyle = "rgba(14,165,233,0.45)";
+  ctx.fillRect(-6, 0, 4, 10);
+  ctx.fillRect(2, 2, 3, 8);
   ctx.fillStyle = "#e0f2fe";
   ctx.beginPath();
-  ctx.ellipse(0, -4, 9, 2.8, 0, 0, TAU);
+  ctx.ellipse(0, -5, 10, 3, 0, 0, TAU);
   ctx.fill();
   ctx.stroke();
   ctx.strokeStyle = "#64748b";
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2.8;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(5, -5);
-  ctx.lineTo(8 + Math.sin(t) * 1.5, -18);
+  ctx.moveTo(6, -6);
+  ctx.lineTo(10 + Math.sin(t) * 1.5, -21);
   ctx.stroke();
   ctx.fillStyle = "rgba(255,255,255,0.55)";
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const oy = Math.sin(t * 2 + i) * 1.5;
     ctx.beginPath();
-    ctx.arc(-3 + i * 3, 1 + oy, 1.4, 0, TAU);
+    ctx.arc(-4 + i * 2.8, 2 + oy, 1.5, 0, TAU);
     ctx.fill();
   }
   ctx.restore();
@@ -527,6 +609,14 @@ function drawBadFriedRing(ctx: CanvasRenderingContext2D, x: number, y: number, t
   ctx.moveTo(4, -6);
   ctx.lineTo(7, -4);
   ctx.stroke();
+  ctx.fillStyle = "rgba(254,252,232,0.9)";
+  for (let i = 0; i < 8; i++) {
+    const px = ((i * 7) % 16) - 8;
+    const py = ((i * 11) % 14) - 7;
+    ctx.beginPath();
+    ctx.arc(px, py, 0.55, 0, TAU);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -568,6 +658,13 @@ function drawBadSugarCube(ctx: CanvasRenderingContext2D, x: number, y: number, t
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  ctx.strokeStyle = "rgba(250,204,21,0.9)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -10);
+  ctx.lineTo(2, -12);
+  ctx.lineTo(4, -10);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -601,6 +698,12 @@ function drawObsLaptop(ctx: CanvasRenderingContext2D, x: number, y: number, t: n
     ctx.moveTo(i * 7, 10);
     ctx.lineTo(i * 7 + 4, 10);
     ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(15,23,42,0.55)";
+  for (let r = 0; r < 3; r++) {
+    for (let c = -2; c <= 2; c++) {
+      ctx.fillRect(c * 7 + 1, 10.5 + r * 1.8, 4, 1.1);
+    }
   }
   ctx.restore();
 }
@@ -671,18 +774,22 @@ function drawObsStress(ctx: CanvasRenderingContext2D, x: number, y: number, t: n
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(Math.sin(t * 0.8) * 0.08);
+  ctx.fillStyle = "rgba(88,28,135,0.4)";
+  ctx.beginPath();
+  ctx.arc(0, 0, 6, 0, TAU);
+  ctx.fill();
   ctx.strokeStyle = "#7e22ce";
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2.8;
   ctx.lineCap = "round";
   for (let i = 0; i < 3; i++) {
     ctx.beginPath();
     ctx.ellipse(0, 0, 10, 6, (i * Math.PI) / 3, 0, TAU);
     ctx.stroke();
   }
-  ctx.strokeStyle = "#c084fc";
+  ctx.strokeStyle = "#e9d5ff";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(0, 0, 4, 0, TAU);
+  ctx.arc(0, 0, 3.5, 0, TAU);
   ctx.stroke();
   ctx.restore();
 }
@@ -722,13 +829,13 @@ export function drawPickupOrObstacle(
 ) {
   const t = nowMs * 0.003;
   const accent = catalogColor(kind, id);
-  const auraR = kind === "good" ? 42 : kind === "bad" ? 38 : 44;
-  const auraA = kind === "good" ? 0.45 : kind === "bad" ? 0.4 : 0.28;
+  const auraR = kind === "good" ? 44 : kind === "bad" ? 40 : 46;
+  const auraA = kind === "good" ? 0.48 : kind === "bad" ? 0.42 : 0.3;
   drawItemAura(ctx, cx, cy, accent, auraR, auraA);
 
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(1.3, 1.3);
+  ctx.scale(1.38, 1.38);
   ctx.translate(-cx, -cy);
 
   if (kind === "good") {

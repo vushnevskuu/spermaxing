@@ -63,22 +63,20 @@ export function RushOnionCloud(props: { active: boolean; reduceMotion: boolean }
       <ellipse cx={7} cy={-1} rx={4} ry={5} fill="rgba(22, 163, 74, 0.28)" />
     </>
   );
-  if (reduceMotion) {
-    return (
-      <g transform="translate(52, 20)" aria-hidden>
-        {blobs}
-      </g>
-    );
-  }
+  /* Базовый translate на статическом <g>: иначе Framer при animate.x перезаписывает transform и облако уезжает к (0,0) — визуально «сзади» головы. */
   return (
-    <motion.g
-      transform="translate(52, 20)"
-      aria-hidden
-      animate={{ x: [0, 0.7, -0.5, 0], opacity: [0.88, 1, 0.9, 0.88] }}
-      transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-    >
-      {blobs}
-    </motion.g>
+    <g transform="translate(52, 20)" aria-hidden>
+      {reduceMotion ? (
+        blobs
+      ) : (
+        <motion.g
+          animate={{ x: [0, 0.7, -0.5, 0], opacity: [0.88, 1, 0.9, 0.88] }}
+          transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+        >
+          {blobs}
+        </motion.g>
+      )}
+    </g>
   );
 }
 
