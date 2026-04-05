@@ -1814,7 +1814,7 @@ export function LobbyClient() {
 
       {eggArcadeOpen ? (
         <div
-          className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+          className="fixed inset-0 z-[100] flex min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-background pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
           role="dialog"
           aria-modal="true"
           aria-label="Solo egg climb"

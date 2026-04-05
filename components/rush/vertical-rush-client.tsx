@@ -252,6 +252,19 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     let listenersOn = false;
     const keys: Record<string, boolean> = {};
     let ctx: CanvasRenderingContext2D | null = null;
+    let boundCanvas: HTMLCanvasElement | null = null;
+
+    const attachToCanvas = (canvas: HTMLCanvasElement): boolean => {
+      const c2d = canvas.getContext("2d");
+      if (!c2d) return false;
+      ctx = c2d;
+      boundCanvas = canvas;
+      const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      c2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return true;
+    };
 
     const down = (e: KeyboardEvent) => {
       keys[e.code] = true;
@@ -271,7 +284,28 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
     let last = performance.now();
 
     const loop = (now: number) => {
-      if (cancelled || !ctx) return;
+      if (cancelled) return;
+      const el = canvasRef.current;
+      if (!el || !el.isConnected) {
+        gameRaf = requestAnimationFrame(loop);
+        return;
+      }
+      if (el !== boundCanvas) {
+        if (!attachToCanvas(el)) {
+          gameRaf = requestAnimationFrame(loop);
+          return;
+        }
+        if (!listenersOn) {
+          window.addEventListener("keydown", down);
+          window.addEventListener("keyup", up);
+          listenersOn = true;
+        }
+        last = performance.now();
+      }
+      if (!ctx) {
+        gameRaf = requestAnimationFrame(loop);
+        return;
+      }
       const g = game.current;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -404,13 +438,10 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
         bootRaf = requestAnimationFrame(boot);
         return;
       }
-      const c2d = canvas.getContext("2d");
-      if (!c2d) return;
-      ctx = c2d;
-      const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
-      canvas.width = W * dpr;
-      canvas.height = H * dpr;
-      c2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!attachToCanvas(canvas)) {
+        bootRaf = requestAnimationFrame(boot);
+        return;
+      }
       if (!listenersOn) {
         window.addEventListener("keydown", down);
         window.addEventListener("keyup", up);
@@ -544,17 +575,20 @@ export function VerticalRushClient({ variant = "page", onExit }: VerticalRushCli
 
       {(phase === "play" || phase === "dead") && (
         <div className="relative mx-auto w-full max-w-[min(100%,360px)] rounded-xl border border-purple-500/30 bg-black/80 p-2 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
-          {/* Aspect box: without this, flex/WebKit often gives canvas 0 CSS height → “black hole” with only HUD visible. */}
+          {/* Padding-bottom aspect: reliable sizing on desktop flex layouts. */}
           <div
             className="relative mx-auto w-full overflow-hidden rounded-lg"
-            style={{ aspectRatio: `${W} / ${H}` }}
+            style={{ height: 0, paddingBottom: `${(H / W) * 100}%` }}
           >
             <canvas
               ref={canvasRef}
               width={W}
               height={H}
-              className="absolute inset-0 block h-full w-full touch-manipulation"
-              style={{ imageRendering: "pixelated" }}
+              className="absolute left-0 top-0 block h-full w-full touch-manipulation"
+              style={{
+                imageRendering: "pixelated",
+                transform: "translateZ(0)",
+              }}
               onPointerDown={(e) => {
                 if (phase !== "play") return;
                 const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
