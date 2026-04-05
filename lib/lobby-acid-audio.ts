@@ -29,6 +29,8 @@ export function createLobbyAcidLoop(opts: Opts): LobbyAcidAudioHandle {
   let running = false;
   let nextPulseAt = 0;
   let raf = 0;
+  /** Отмена in-flight start после stop. */
+  let runGeneration = 0;
 
   function playAccentAt(time: number) {
     if (!ctx || !master) return;
@@ -68,6 +70,9 @@ export function createLobbyAcidLoop(opts: Opts): LobbyAcidAudioHandle {
   function tick() {
     if (!running || !ctx || !master) return;
     const t = ctx.currentTime;
+    while (nextPulseAt < t - 0.02) {
+      nextPulseAt += pulseSec;
+    }
     while (nextPulseAt < t + 0.03) {
       playAccentAt(nextPulseAt);
       opts.onAccent();
@@ -79,18 +84,26 @@ export function createLobbyAcidLoop(opts: Opts): LobbyAcidAudioHandle {
   return {
     async start() {
       if (running) return;
+      const myGen = ++runGeneration;
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
-      ctx = new AudioCtx();
-      master = ctx.createGain();
-      master.gain.value = 1;
-      master.connect(ctx.destination);
-      await ctx.resume();
+      const newCtx = new AudioCtx();
+      const newMaster = newCtx.createGain();
+      newMaster.gain.value = 1;
+      newMaster.connect(newCtx.destination);
+      await newCtx.resume();
+      if (myGen !== runGeneration) {
+        void newCtx.close();
+        return;
+      }
+      ctx = newCtx;
+      master = newMaster;
       running = true;
-      nextPulseAt = ctx.currentTime + 0.12;
+      nextPulseAt = newCtx.currentTime + 0.12;
       tick();
     },
     stop() {
+      runGeneration += 1;
       running = false;
       cancelAnimationFrame(raf);
       raf = 0;
