@@ -391,14 +391,27 @@ export function RaceClient({ roomId }: { roomId: string }) {
         }}
       />
       <div className="relative z-10 mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[max(1rem,env(safe-area-inset-top,0px))]">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Badge variant="outline" className="font-display tracking-wide">
             Room: {demo ? "demo" : roomId.slice(0, 8)}
           </Badge>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/lobby">Lobby</Link>
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="text-xs" asChild>
+              <Link href="/rush">Arcade</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/lobby">Lobby</Link>
+            </Button>
+          </div>
         </div>
+        <p className="text-center text-[10px] leading-snug text-muted-foreground">
+          This screen is the <span className="text-foreground/80">lobby sprint race</span> (horizontal track, rival %). The Nokia-style
+          climb with pickups &amp; junk food is{" "}
+          <Link href="/rush" className="text-cyan-300 underline underline-offset-2 hover:text-cyan-200">
+            Vertical rush (Arcade)
+          </Link>
+          .
+        </p>
 
         <AnimatePresence mode="wait">
           {racePhase !== "done" ? (
@@ -407,7 +420,7 @@ export function RaceClient({ roomId }: { roomId: string }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="arcade-panel relative min-h-[440px] overflow-hidden rounded-lg"
+              className="arcade-panel relative mx-auto min-h-[min(72dvh,620px)] w-full max-w-[360px] overflow-hidden rounded-lg border border-border/60 shadow-[0_0_40px_rgba(0,0,0,0.35)]"
               style={{ perspective: "640px" }}
             >
               <div className="absolute inset-0 bg-gradient-to-b from-neutral-900/50 via-background to-black" />
@@ -449,9 +462,9 @@ export function RaceClient({ roomId }: { roomId: string }) {
               </div>
 
               <div className="absolute left-3 right-3 top-11 z-10 flex flex-col gap-1.5 text-[10px] font-mono text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>← → lanes (loadout handling)</span>
-                  <span className="text-foreground/80">Space · BOOST</span>
+                <div className="flex justify-between gap-1">
+                  <span className="leading-tight">← → lanes · dodge red hazards</span>
+                  <span className="shrink-0 text-foreground/80">Space · BOOST</span>
                 </div>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
                   <div
@@ -475,14 +488,18 @@ export function RaceClient({ roomId }: { roomId: string }) {
                   return (
                     <div
                       key={i}
-                      className="absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+                      className="absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
                       style={{
                         left: `${20 + o.lane * 30}%`,
                         top: `${12 + o.t * 76}%`,
                       }}
                       aria-hidden
                     >
-                      <div className="h-5 w-5 rotate-45 rounded-sm border border-rose-400/35 bg-rose-500/15 shadow-[0_0_12px_rgba(244,63,94,0.25)]" />
+                      <div className="relative h-11 w-11 rotate-45 rounded-md border-2 border-rose-400 bg-rose-600/45 shadow-[0_0_24px_rgba(244,63,94,0.55)] ring-2 ring-rose-300/50 animate-pulse">
+                        <span className="absolute inset-0 flex items-center justify-center -rotate-45 text-[10px] font-black text-rose-950/90">
+                          !
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -592,6 +609,9 @@ export function RaceClient({ roomId }: { roomId: string }) {
               <div className="mt-6 flex flex-wrap justify-center gap-2">
                 <Button asChild>
                   <Link href="/lobby">Back to lobby</Link>
+                </Button>
+                <Button variant="secondary" asChild>
+                  <Link href="/rush">Arcade</Link>
                 </Button>
                 <Button variant="secondary" asChild>
                   <Link href="/leaderboard">Leaderboard</Link>

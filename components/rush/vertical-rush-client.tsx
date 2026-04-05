@@ -46,8 +46,15 @@ function laneCenterX(lane: number): number {
   return (lane + 0.5) * (W / LANES);
 }
 
-export function VerticalRushClient() {
+export type VerticalRushClientProps = {
+  /** `embed` = opened from lobby (egg zone); no “rush” framing, Esc/Close returns. */
+  variant?: "page" | "embed";
+  onExit?: () => void;
+};
+
+export function VerticalRushClient({ variant = "page", onExit }: VerticalRushClientProps = {}) {
   const router = useRouter();
+  const embed = variant === "embed";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "play" | "dead">("loading");
   const [hud, setHud] = useState({
@@ -95,6 +102,18 @@ export function VerticalRushClient() {
     }
     setPhase("ready");
   }, [router]);
+
+  useEffect(() => {
+    if (!embed || !onExit) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      onExit();
+    };
+    document.addEventListener("keydown", onEsc, true);
+    return () => document.removeEventListener("keydown", onEsc, true);
+  }, [embed, onExit]);
 
   const pushToast = (g: typeof game.current, text: string) => {
     g.toastText = text;
@@ -376,22 +395,48 @@ export function VerticalRushClient() {
   /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-lg flex-col gap-3 px-safe py-4 pb-safe pt-safe">
+    <div
+      className={`mx-auto flex max-w-lg flex-col gap-3 px-safe py-4 pb-safe pt-safe ${embed ? "min-h-0 flex-1 overflow-y-auto" : "min-h-dvh"}`}
+    >
       <div className="flex items-center justify-between gap-2">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/lobby">Lobby</Link>
-        </Button>
-        <span className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Vertical rush
-        </span>
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/leaderboard">Ranks</Link>
-        </Button>
+        {embed ? (
+          <>
+            <Button variant="ghost" size="sm" type="button" onClick={() => onExit?.()}>
+              Close
+            </Button>
+            <span className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Egg climb
+            </span>
+            <span className="w-14 shrink-0" aria-hidden />
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/lobby">Lobby</Link>
+            </Button>
+            <span className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Vertical rush
+            </span>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/leaderboard">Ranks</Link>
+            </Button>
+          </>
+        )}
       </div>
 
       <p className="text-center text-[11px] leading-snug text-muted-foreground">
-        Nokia-style climb: you move up through lanes. Buffs (cyan ring), junk debuffs (pink dashed ring), and red-framed
-        walls hurt on contact. Arrows strafe · Space shoots after Citrus. Parody wellness props only — not medical advice.
+        {embed ? (
+          <>
+            Climb the lanes from the egg. <span className="text-foreground/80">Esc</span> or Close to return. Arrows strafe
+            · Space shoots after Citrus. Parody props — not medical advice.
+          </>
+        ) : (
+          <>
+            Nokia-style climb: you move up through lanes. Buffs (cyan ring), junk debuffs (pink dashed ring), and
+            red-framed walls hurt on contact. Arrows strafe · Space shoots after Citrus. Parody wellness props only — not
+            medical advice.
+          </>
+        )}
       </p>
 
       {phase === "loading" ? (
@@ -481,6 +526,11 @@ export function VerticalRushClient() {
             <Button className="neon" onClick={startRun}>
               Again
             </Button>
+            {embed ? (
+              <Button variant="secondary" type="button" onClick={() => onExit?.()}>
+                Back to lobby
+              </Button>
+            ) : null}
             <Button variant="secondary" asChild>
               <Link href="/leaderboard">Leaderboard</Link>
             </Button>

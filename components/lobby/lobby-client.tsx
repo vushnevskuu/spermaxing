@@ -32,6 +32,7 @@ import { useLobbyStore } from "@/store/lobby-store";
 import { useLobbyRhythmStore } from "@/store/lobby-rhythm-store";
 import { LobbyAudioBridge } from "@/components/lobby/lobby-audio-bridge";
 import { LobbyEggZone } from "@/components/lobby/lobby-egg-zone";
+import { VerticalRushClient } from "@/components/rush/vertical-rush-client";
 import { RhythmPulseWrap } from "@/components/lobby/rhythm-pulse-wrap";
 import { SwimmerAvatar } from "@/components/avatar/swimmer-avatar";
 import { PlayerCard } from "@/components/profile/player-card";
@@ -498,6 +499,9 @@ export function LobbyClient() {
   const selectedProfileId = useLobbyStore((s) => s.selectedProfileId);
   const setSelectedProfileId = useLobbyStore((s) => s.setSelectedProfileId);
   const [reportOpen, setReportOpen] = useState(false);
+  const [eggArcadeOpen, setEggArcadeOpen] = useState(false);
+  const eggArcadeOpenRef = useRef(false);
+  eggArcadeOpenRef.current = eggArcadeOpen;
   const [reportTarget, setReportTarget] = useState<{ id: string; nick: string } | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [chatCollapsed, setChatCollapsed] = useState(false);
@@ -1005,7 +1009,7 @@ export function LobbyClient() {
   /* Matchmaking RPC */
   useEffect(() => {
     if (!me || mock) return;
-    if (!inEggZone) {
+    if (!inEggZone || eggArcadeOpen) {
       setQueueHint(null);
       matchLock.current = false;
       if (matchIv.current) {
@@ -1014,7 +1018,7 @@ export function LobbyClient() {
       }
       return;
     }
-    setQueueHint("In queue… need another swimmer in the zone.");
+    setQueueHint("In queue for PvP… Press Q in the egg for solo climb.");
     if (matchIv.current) clearInterval(matchIv.current);
     matchIv.current = window.setInterval(async () => {
       if (matchLock.current) return;
@@ -1049,7 +1053,22 @@ export function LobbyClient() {
         matchIv.current = null;
       }
     };
-  }, [me, mock, inEggZone, router, setQueueHint]);
+  }, [me, mock, inEggZone, eggArcadeOpen, router, setQueueHint]);
+
+  useEffect(() => {
+    const onSolo = (e: KeyboardEvent) => {
+      if (e.code !== "KeyQ" || e.repeat) return;
+      if (chatFocusedRef.current) return;
+      if (!me || eggArcadeOpen) return;
+      if (!inEggZone) return;
+      if (countdown != null) return;
+      if (selectedProfileId || reportOpen) return;
+      e.preventDefault();
+      setEggArcadeOpen(true);
+    };
+    window.addEventListener("keydown", onSolo);
+    return () => window.removeEventListener("keydown", onSolo);
+  }, [me, inEggZone, eggArcadeOpen, countdown, selectedProfileId, reportOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1077,6 +1096,7 @@ export function LobbyClient() {
   useEffect(() => {
     const onDoc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (eggArcadeOpen) return;
       if (selectedProfileId) return;
       const t = e.target;
       if (t instanceof HTMLInputElement && t.dataset.lobbyChat === "1") return;
@@ -1086,7 +1106,7 @@ export function LobbyClient() {
     };
     document.addEventListener("keydown", onDoc);
     return () => document.removeEventListener("keydown", onDoc);
-  }, [router, selectedProfileId]);
+  }, [router, selectedProfileId, eggArcadeOpen]);
 
   useEffect(() => {
     let raf = 0;
@@ -1097,7 +1117,7 @@ export function LobbyClient() {
           .map((s) => ({ x: s.x, y: s.y }));
       }
       const sp = 0.006;
-      const move = !chatFocusedRef.current;
+      const move = !chatFocusedRef.current && !eggArcadeOpenRef.current;
       if (move && (keys.current["KeyW"] || keys.current["ArrowUp"])) posRef.current.y -= sp;
       if (move && (keys.current["KeyS"] || keys.current["ArrowDown"])) posRef.current.y += sp;
       if (move && (keys.current["KeyA"] || keys.current["ArrowLeft"])) posRef.current.x -= sp;
@@ -1407,12 +1427,6 @@ export function LobbyClient() {
               Beat
             </Button>
             <Link
-              href="/rush"
-              className="inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-0 md:py-1.5"
-            >
-              Arcade
-            </Link>
-            <Link
               href="/leaderboard"
               className="inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-0 md:py-1.5"
             >
@@ -1493,7 +1507,7 @@ export function LobbyClient() {
                     <span className="font-mono text-foreground">/w</span> then pick a name ·{" "}
                     <span className="font-mono text-foreground">/w Name message</span> ·{" "}
                     <span className="font-mono text-foreground">Esc</span> wardrobe · whisper to you = short ping · WASD
-                    when chat unfocused
+                    when chat unfocused · in the egg: <span className="font-mono text-foreground">Q</span> solo climb
                   </p>
                   <ScrollArea
                     className="relative z-[1] h-[min(28vh,200px)] p-2"
@@ -1790,6 +1804,24 @@ export function LobbyClient() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {inEggZone && me && !eggArcadeOpen ? (
+        <div className="pointer-events-none fixed bottom-[max(5.5rem,env(safe-area-inset-bottom,0px)+4.5rem)] left-1/2 z-[60] max-w-[min(92vw,320px)] -translate-x-1/2 rounded-full border border-cyan-500/35 bg-zinc-950/90 px-3 py-1.5 text-center text-[10px] font-medium leading-snug text-cyan-100/95 shadow-lg backdrop-blur-sm">
+          Press <kbd className="mx-0.5 rounded border border-white/20 bg-white/10 px-1.5 py-px font-mono">Q</kbd> for
+          solo egg climb
+        </div>
+      ) : null}
+
+      {eggArcadeOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Solo egg climb"
+        >
+          <VerticalRushClient variant="embed" onExit={() => setEggArcadeOpen(false)} />
+        </div>
+      ) : null}
     </div>
   );
 }
