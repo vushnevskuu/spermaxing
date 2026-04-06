@@ -2,11 +2,16 @@
   "name": "ovum-rush",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
-    "dev": "next dev",
-    "dev:turbo": "next dev --turbopack",
-    "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev",
-    "dev:clean:turbo": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev --turbopack",
+    "dev": "node scripts/ensure-next-dev-static.mjs && next dev --turbopack",
+    "dev:webpack": "node scripts/ensure-next-dev-static.mjs && next dev",
+    "dev:turbo": "node scripts/ensure-next-dev-static.mjs && next dev --turbopack",
+    "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && node scripts/ensure-next-dev-static.mjs && next dev --turbopack",
+    "dev:clean:turbo": "npm run dev:clean",
+    "prestart": "node scripts/check-next-build.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

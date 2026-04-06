@@ -45,11 +45,11 @@ Step-by-step (Russian): [docs/deploy-vercel-ru.md](docs/deploy-vercel-ru.md).
 
 ## Scripts
 
-- `npm run dev` — dev (стабильный режим Next.js)
-- `npm run dev:turbo` — dev с Turbopack (быстрее; при странных 500 после `build` используй `dev:clean:turbo` или `dev:clean`)
-- `npm run dev:clean` — удалить `.next` и запустить dev
-- `npm run dev:clean:turbo` — то же, затем dev с Turbopack
-- `npm run build` / `npm run start` — production
+- `npm run dev` — dev с Turbopack (перед стартом создаётся `.next/static/development`, чтобы не было 500 после `build`)
+- `npm run dev:webpack` — dev без Turbopack, если нужен запасной вариант
+- `npm run dev:clean` — полный сброс `.next` и снова `dev` (если кэш совсем испортился)
+- `npm run dev:turbo` / `npm run dev:clean:turbo` — алиасы к `dev` и `dev:clean`
+- `npm run build` затем `npm run start` — production (`start` без сборки завершится с подсказкой)
 - `npm run lint` — ESLint
 - `npm run format` — Prettier
 
