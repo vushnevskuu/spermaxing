@@ -59,6 +59,9 @@ export const metadata: Metadata = {
     description:
       "Beta arcade with live chat for men's health and sperm maxing talk — not medical advice.",
   },
+  verification: {
+    google: "f_9YKbZguh9ca_iUEMBlcqtHiQGdI_QIGHlBs5iZRkI",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
