@@ -1,9 +1,10 @@
 import type { MetadataRoute } from "next";
+import { publicSiteOrigin } from "@/lib/site-url";
 
 const paths = ["", "/enter", "/leaderboard", "/faq", "/rush", "/login", "/onboarding"];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "https://example.com";
+  const base = publicSiteOrigin();
   const now = new Date();
   return paths.map((path) => ({
     url: `${base}${path || "/"}`,

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, JetBrains_Mono, Orbitron } from "next/font/google";
 import "@/styles/globals.css";
+import { publicSiteOrigin } from "@/lib/site-url";
 
 const sans = Space_Grotesk({
   subsets: ["latin", "latin-ext"],
@@ -18,7 +19,10 @@ const display = Orbitron({
   weight: ["600", "700", "900"],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+const siteUrl = (() => {
+  const o = publicSiteOrigin();
+  return o === "https://example.com" ? undefined : o;
+})();
 
 export const viewport: Viewport = {
   width: "device-width",

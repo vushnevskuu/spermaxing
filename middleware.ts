@@ -7,6 +7,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    /* Skip SEO / static verification so crawlers never hit Supabase session refresh. */
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|google[0-9a-z]+\\.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

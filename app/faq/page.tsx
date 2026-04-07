@@ -3,8 +3,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MensHealthFaqSection } from "@/components/marketing/mens-health-faq";
 import { MENS_HEALTH_FAQ_ITEMS, faqJsonLdMainEntity } from "@/lib/mens-health-faq";
+import { publicSiteOrigin } from "@/lib/site-url";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+const origin = publicSiteOrigin();
+const siteUrl = origin === "https://example.com" ? undefined : origin;
 
 export const metadata: Metadata = {
   title: "Men’s health & fertility FAQ — discussion topics",
