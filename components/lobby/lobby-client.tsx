@@ -1511,6 +1511,12 @@ export function LobbyClient() {
               Beat
             </Button>
             <Link
+              href="/faq"
+              className="inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-0 md:py-1.5"
+            >
+              FAQ
+            </Link>
+            <Link
               href="/leaderboard"
               className="inline-flex min-h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-0 md:py-1.5"
             >

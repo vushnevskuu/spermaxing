@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const paths = ["", "/enter", "/leaderboard", "/rush", "/login", "/onboarding"];
+const paths = ["", "/enter", "/leaderboard", "/faq", "/rush", "/login", "/onboarding"];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "https://example.com";
@@ -8,7 +8,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return paths.map((path) => ({
     url: `${base}${path || "/"}`,
     lastModified: now,
-    changeFrequency: path === "" ? "weekly" : "monthly",
-    priority: path === "" ? 1 : 0.7,
+    changeFrequency: path === "" || path === "/faq" ? "weekly" : "monthly",
+    priority: path === "" ? 1 : path === "/faq" ? 0.85 : 0.7,
   }));
 }

@@ -37,9 +37,10 @@ export const metadata: Metadata = {
     "Beta browser arcade: live lobby chat for men's health talk, sperm maxing discussion, and casual men's chat — plus cartoon swimmer races. Entertainment only; not medical advice.",
   keywords: [
     "OVUM RUSH",
-    "beta game",
     "men's health chat",
     "sperm maxing",
+    "spermmaxxing FAQ",
+    "male fertility discussion",
     "men's community",
     "live lobby",
     "browser arcade",
@@ -50,6 +51,7 @@ export const metadata: Metadata = {
     description:
       "Join the beta: lobby chat for men's wellness topics and sperm maxing discussion, plus short neon races. Not medical advice.",
     type: "website",
+    ...(siteUrl ? { url: siteUrl } : {}),
   },
   twitter: {
     card: "summary_large_image",

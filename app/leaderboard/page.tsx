@@ -1,8 +1,5 @@
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/mock-mode";
-
-/** Всегда тянуть актуальные строки из Supabase, а не кэш билда. */
-export const dynamic = "force-dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +9,10 @@ import {
   VerticalRushLeaderboardTable,
   type VerticalRushRow,
 } from "@/components/leaderboard/vertical-rush-leaderboard-table";
+import { MensHealthFaqSection } from "@/components/marketing/mens-health-faq";
+
+/** Всегда тянуть актуальные строки из Supabase, а не кэш билда. */
+export const dynamic = "force-dynamic";
 
 type GlobalRow = {
   id: string;
@@ -90,11 +91,19 @@ export default async function LeaderboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl py-10 pt-safe pb-safe px-safe">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-black text-white">Leaderboard</h1>
-        <Button variant="secondary" asChild>
-          <Link href="/lobby">To lobby</Link>
-        </Button>
+      <div className="mb-6 flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-3xl font-black text-white">Leaderboard</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/faq">FAQ</Link>
+            </Button>
+            <Button variant="secondary" asChild>
+              <Link href="/lobby">To lobby</Link>
+            </Button>
+          </div>
+        </div>
+        <MensHealthFaqSection previewCount={5} heading="Men’s health topics (chat context)" />
       </div>
       <Card>
         <CardHeader>
@@ -126,7 +135,7 @@ export default async function LeaderboardPage() {
             <TabsContent value="vertical">
               <p className="mb-3 text-xs text-muted-foreground">
                 Best distance (m) from logged-in runs in{" "}
-                <Link href="/rush" className="text-purple-300 underline underline-offset-2 hover:text-purple-200">
+                <Link href="/rush" className="text-amber-200/90 underline underline-offset-2 hover:text-amber-100">
                   Arcade / Vertical rush
                 </Link>{" "}
                 (egg climb). Scores sync when you finish a run with an account. Migration:{" "}

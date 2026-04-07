@@ -24,6 +24,9 @@ export function LandingPage() {
               <Link href="/rush">Arcade</Link>
             </Button>
             <Button variant="ghost" size="sm" className="text-xs sm:text-sm" asChild>
+              <Link href="/faq">FAQ</Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="text-xs sm:text-sm" asChild>
               <Link href="/leaderboard">Leaderboard</Link>
             </Button>
           </div>

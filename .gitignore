@@ -42,3 +42,6 @@ next-env.d.ts
 .agent/
 __pycache__/
 *.py[cod]
+
+# Optional: large marketing skills bundle (see .agents/product-marketing-context.md)
+.agents/skills/
