@@ -15,7 +15,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { ChevronUp, MessageSquare, Minus, Sparkles, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronUp, MessageSquare, Minus, RotateCcw, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { isSupabaseConfigured } from "@/lib/mock-mode";
@@ -74,6 +74,15 @@ import {
 const REF = {
   bg: "#0a0a0a",
 } as const;
+
+/** Сохраняемые размеры окна чата (это устройство). */
+const CHAT_LAYOUT_STORAGE_KEY = "ovum_rush_chat_layout_v1";
+const CHAT_PANEL_W_DEFAULT = 304;
+const CHAT_MSGS_H_DEFAULT = 200;
+const CHAT_W_MIN = 240;
+const CHAT_W_MAX = 520;
+const CHAT_H_MIN = 88;
+const CHAT_H_MAX = 560;
 
 type Swimmer = {
   profileId: string;
@@ -563,6 +572,12 @@ export function LobbyClient() {
   const [reportTarget, setReportTarget] = useState<{ id: string; nick: string } | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [chatPanelW, setChatPanelW] = useState(CHAT_PANEL_W_DEFAULT);
+  const [chatMsgsH, setChatMsgsH] = useState(CHAT_MSGS_H_DEFAULT);
+  const chatLayoutSnapshotRef = useRef({ w: CHAT_PANEL_W_DEFAULT, h: CHAT_MSGS_H_DEFAULT });
+  const chatLayoutDragRef = useRef<null | { kind: "w" | "h"; start: number; startW?: number; startH?: number }>(
+    null
+  );
   /** Открытое контекстное меню по нику в чате (id сообщения). */
   const [chatNickMenuMsgId, setChatNickMenuMsgId] = useState<string | null>(null);
   const [peekCard, setPeekCard] = useState<ProfileCardData | null>(null);
@@ -589,6 +604,103 @@ export function LobbyClient() {
   const setLobbyMusicOn = useLobbyRhythmStore((s) => s.setLobbyMusicOn);
   const reduceMotion = useReducedMotion();
   const visualRhythm = Boolean(lobbyMusicOn && !reduceMotion);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_LAYOUT_STORAGE_KEY);
+      if (!raw) return;
+      const j = JSON.parse(raw) as { w?: number; h?: number };
+      if (typeof j.w === "number" && Number.isFinite(j.w)) {
+        const nw = Math.min(Math.max(j.w, CHAT_W_MIN), CHAT_W_MAX);
+        setChatPanelW(nw);
+        chatLayoutSnapshotRef.current.w = nw;
+      }
+      if (typeof j.h === "number" && Number.isFinite(j.h)) {
+        const nh = Math.min(Math.max(j.h, CHAT_H_MIN), CHAT_H_MAX);
+        setChatMsgsH(nh);
+        chatLayoutSnapshotRef.current.h = nh;
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    chatLayoutSnapshotRef.current.w = chatPanelW;
+    chatLayoutSnapshotRef.current.h = chatMsgsH;
+  }, [chatPanelW, chatMsgsH]);
+
+  const persistChatLayout = useCallback(() => {
+    const { w, h } = chatLayoutSnapshotRef.current;
+    try {
+      localStorage.setItem(CHAT_LAYOUT_STORAGE_KEY, JSON.stringify({ w, h }));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const resetChatLayout = useCallback(() => {
+    setChatPanelW(CHAT_PANEL_W_DEFAULT);
+    setChatMsgsH(CHAT_MSGS_H_DEFAULT);
+    chatLayoutSnapshotRef.current = { w: CHAT_PANEL_W_DEFAULT, h: CHAT_MSGS_H_DEFAULT };
+    try {
+      localStorage.setItem(
+        CHAT_LAYOUT_STORAGE_KEY,
+        JSON.stringify({ w: CHAT_PANEL_W_DEFAULT, h: CHAT_MSGS_H_DEFAULT })
+      );
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const onChatResizeMove = useCallback((e: React.PointerEvent) => {
+    const d = chatLayoutDragRef.current;
+    if (!d || typeof window === "undefined") return;
+    if (d.kind === "w" && d.startW !== undefined) {
+      const maxW = Math.min(CHAT_W_MAX, window.innerWidth - 20);
+      const nw = Math.min(Math.max(CHAT_W_MIN, d.startW + (e.clientX - d.start)), maxW);
+      chatLayoutSnapshotRef.current.w = nw;
+      setChatPanelW(nw);
+    } else if (d.kind === "h" && d.startH !== undefined) {
+      const nh = Math.min(Math.max(CHAT_H_MIN, d.startH - (e.clientY - d.start)), CHAT_H_MAX);
+      chatLayoutSnapshotRef.current.h = nh;
+      setChatMsgsH(nh);
+    }
+  }, []);
+
+  const onChatResizeUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!chatLayoutDragRef.current) return;
+      chatLayoutDragRef.current = null;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      persistChatLayout();
+    },
+    [persistChatLayout]
+  );
+
+  const onChatResizeWidthDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      chatLayoutDragRef.current = { kind: "w", start: e.clientX, startW: chatPanelW };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [chatPanelW]
+  );
+
+  const onChatResizeHeightDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      chatLayoutDragRef.current = { kind: "h", start: e.clientY, startH: chatMsgsH };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [chatMsgsH]
+  );
 
   const syncLocalAvatarDom = useCallback(() => {
     const el = localAvatarButtonRef.current;
@@ -1526,7 +1638,8 @@ export function LobbyClient() {
 
           <div
             data-lobby-chrome
-            className="absolute bottom-[max(0.5rem,env(safe-area-inset-bottom,0px))] left-[max(0.5rem,env(safe-area-inset-left,0px))] z-30 w-[min(calc(100%-1rem),304px)] max-w-[calc(100%-1.25rem)] touch-manipulation"
+            className="absolute bottom-[max(0.5rem,env(safe-area-inset-bottom,0px))] left-[max(0.5rem,env(safe-area-inset-left,0px))] z-30 max-w-[calc(100vw-1rem)] touch-manipulation"
+            style={{ width: chatPanelW }}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerMove={(e) => e.stopPropagation()}
           >
@@ -1557,6 +1670,17 @@ export function LobbyClient() {
                   transition={{ duration: 0.18 }}
                   className="relative overflow-hidden rounded-lg border border-border bg-card shadow-sm"
                 >
+                  <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize chat width"
+                    title="Drag sideways to change width"
+                    className="absolute bottom-16 right-0 top-14 z-[5] w-3 cursor-ew-resize touch-none hover:bg-muted/25 active:bg-muted/40"
+                    onPointerDown={onChatResizeWidthDown}
+                    onPointerMove={onChatResizeMove}
+                    onPointerUp={onChatResizeUp}
+                    onPointerCancel={onChatResizeUp}
+                  />
                   <div className="relative z-[1] flex items-center justify-between gap-2 border-b border-border px-2 py-1.5">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
                       Chat
@@ -1571,6 +1695,17 @@ export function LobbyClient() {
                           → {whisperTo.nick} ✕
                         </button>
                       ) : null}
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 shrink-0 text-muted-foreground"
+                        aria-label="Reset chat size"
+                        title="Default width and height"
+                        onClick={resetChatLayout}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </Button>
                       <Button
                         type="button"
                         size="icon"
@@ -1597,10 +1732,25 @@ export function LobbyClient() {
                     <span className="font-mono text-foreground">/w</span> then pick a name · click a name for whisper /
                     profile / report · <span className="font-mono text-foreground">/w Name message</span> ·{" "}
                     <span className="font-mono text-foreground">Esc</span> wardrobe · whisper to you = short ping · WASD
-                    when chat unfocused · in the egg: <span className="font-mono text-foreground">Q</span> solo climb
+                    when chat unfocused · in the egg: <span className="font-mono text-foreground">Q</span> solo climb ·
+                    drag bar below for height, right edge for width
                   </p>
+                  <div
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label="Resize chat message area height"
+                    title="Drag up/down to change height"
+                    className="relative z-[2] flex h-3 shrink-0 cursor-ns-resize touch-none items-center justify-center border-y border-border/50 bg-muted/25 hover:bg-muted/40 active:bg-muted/55"
+                    onPointerDown={onChatResizeHeightDown}
+                    onPointerMove={onChatResizeMove}
+                    onPointerUp={onChatResizeUp}
+                    onPointerCancel={onChatResizeUp}
+                  >
+                    <span className="h-0.5 w-9 rounded-full bg-muted-foreground/35" aria-hidden />
+                  </div>
                   <ScrollArea
-                    className="relative z-[1] h-[min(28vh,200px)] p-2"
+                    className="relative z-[1] p-2"
+                    style={{ height: chatMsgsH }}
                     thumbClassName="rounded-full bg-neutral-600/60 hover:bg-neutral-500/70"
                     scrollbarClassName="w-1 border-l-0 p-px"
                     viewportRef={chatScrollViewportRef}
