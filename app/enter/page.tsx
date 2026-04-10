@@ -95,7 +95,7 @@ export default function EnterPage() {
               "No active session. Refresh and try again, or allow cookies for this site (blocking them signs you out).";
           } else if (res.status === 409) {
             msg =
-              "That nickname is already tied to another anonymous login. Use the same browser where you first picked it (don’t clear site data), or choose a different nickname. Beta: there’s no account recovery yet.";
+              "That nickname is already tied to another anonymous login. Use the same browser where you first picked it (don’t clear site data), or choose a different nickname. alpha: there’s no account recovery yet.";
           } else if (typeof j.error === "string") {
             msg = j.error;
           } else if (j.error && typeof j.error === "object" && "formErrors" in j.error) {

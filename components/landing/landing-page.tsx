@@ -16,7 +16,7 @@ export function LandingPage() {
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="font-display truncate text-base font-bold tracking-tight sm:text-lg">OVUM RUSH</span>
             <Badge variant="secondary" className="shrink-0 text-[10px] sm:text-xs">
-              Beta
+              alpha
             </Badge>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -39,7 +39,7 @@ export function LandingPage() {
       >
         <div className="mx-auto w-full max-w-lg">
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-amber-200/90 sm:text-xs">
-            Open beta — may change
+            Open alpha — may change
           </p>
           <h1
             id="hero-heading"
@@ -82,7 +82,7 @@ export function LandingPage() {
       </main>
 
       <footer className="shrink-0 border-t border-border/40 px-safe py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] text-[10px] leading-tight text-muted-foreground">
-        <p className="mx-auto max-w-lg text-center">Beta chat lobby · races optional · not clinical care</p>
+        <p className="mx-auto max-w-lg text-center">alpha chat lobby · races optional · not clinical care</p>
       </footer>
     </div>
   );

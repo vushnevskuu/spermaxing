@@ -33,12 +33,13 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   ...(siteUrl ? { metadataBase: new URL(siteUrl) } : {}),
+  applicationName: "spermmaxing",
   title: {
-    default: "OVUM RUSH — Beta men's lobby chat, sperm maxing & micro-races",
+    default: "OVUM RUSH — alpha men's lobby chat, sperm maxing & micro-races",
     template: "%s | OVUM RUSH",
   },
   description:
-    "Beta browser arcade: live lobby chat for men's health talk, sperm maxing discussion, and casual men's chat — plus cartoon swimmer races. Entertainment only; not medical advice.",
+    "alpha browser arcade: live lobby chat for men's health talk, sperm maxing discussion, and casual men's chat — plus cartoon swimmer races. Entertainment only; not medical advice.",
   keywords: [
     "OVUM RUSH",
     "men's health chat",
@@ -51,17 +52,18 @@ export const metadata: Metadata = {
     "micro-races",
   ],
   openGraph: {
-    title: "OVUM RUSH — Beta men's lobby & live chat arcade",
+    siteName: "spermmaxing",
+    title: "OVUM RUSH — alpha men's lobby & live chat arcade",
     description:
-      "Join the beta: lobby chat for men's wellness topics and sperm maxing discussion, plus short neon races. Not medical advice.",
+      "Join the alpha: lobby chat for men's wellness topics and sperm maxing discussion, plus short neon races. Not medical advice.",
     type: "website",
     ...(siteUrl ? { url: siteUrl } : {}),
   },
   twitter: {
     card: "summary_large_image",
-    title: "OVUM RUSH — Beta men's lobby chat & races",
+    title: "OVUM RUSH — alpha men's lobby chat & races",
     description:
-      "Beta arcade with live chat for men's health and sperm maxing talk — not medical advice.",
+      "alpha arcade with live chat for men's health and sperm maxing talk — not medical advice.",
   },
   verification: {
     google: "f_9YKbZguh9ca_iUEMBlcqtHiQGdI_QIGHlBs5iZRkI",
